@@ -66,11 +66,23 @@ Recorded as sources are adopted:
 
 | Source | Use | Licence |
 |---|---|---|
-| *(none adopted yet)* | | |
+| [Armenian Soviet Encyclopedia](https://hy.wikisource.org/wiki/Հայկական_սովետական_հանրագիտարան) on Armenian Wikisource (13 volumes, 1974–1987) | Corpus text for synthesis; paired page scans + transcripts for fine-tuning crops and evaluation | CC BY-SA 3.0, as stated by the hosting Wikisource page |
 
-Planned candidates: Armenian Wikisource (public domain) and Armenian
-Wikipedia (CC BY-SA 4.0) for corpus text; the Noto Armenian family, GHEA
-faces and Arian AMU (all OFL) for fonts.
+Two disciplines attach to the encyclopedia source:
+
+- **Only proofread pages.** Wikisource seeds unproofread pages with
+  machine OCR; training on those would teach the model another engine's
+  mistakes. Harvesting filters on ProofreadPage quality status
+  (proofread/validated only), via the API.
+- **Attribution and share-alike.** BY is satisfied by this table and the
+  provenance records shipped with weights. Whether SA obligations
+  propagate to trained weights is a genuinely unsettled question; we
+  record the source and licence with every release so the position is
+  auditable either way.
+
+Further candidates: Armenian Wikisource's public-domain period texts and
+Armenian Wikipedia (CC BY-SA 4.0) for corpus text; the Noto Armenian
+family, GHEA faces and Arian AMU (all OFL) for fonts.
 
 ## Licence
 
