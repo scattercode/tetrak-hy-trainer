@@ -45,6 +45,14 @@ The name is a Python module name (EasyOCR imports it), hence the
 underscore. The model uses a CTC head — EasyOCR's custom-model inference
 path is CTC-only.
 
+**Distribution happens through
+[tetrak-easyocr-armenian](https://github.com/scattercode/tetrak-easyocr-armenian)**,
+the installable library whose import package *is* the `tetrak_hy` network:
+this trainer's output — the yaml, the weights and their provenance — lands
+there as a pull request, and a weights release on that repo is what users
+install. The bundle-writing here remains the tool for local spikes and for
+producing that PR.
+
 ## Status
 
 Early scaffold. The pipeline stages, in order:
