@@ -28,6 +28,18 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.5"]
+# What the vendored trainer (training/) imports, beyond the core deps.
+# Heavy by design and never installed in CI.
+train = [
+    "torch>=2.0",
+    "torchvision>=0.15",
+    "pandas>=1.5",
+    "numpy>=1.24",
+    "natsort>=8.0",
+    "six>=1.16",
+    "pillow>=10.0",
+    "opencv-python-headless>=4.6",
+]
 
 [project.urls]
 Homepage = "https://github.com/scattercode/tetrak-hy-trainer"
@@ -38,6 +50,8 @@ packages = ["src/tetrak_hy_trainer"]
 
 [tool.ruff]
 line-length = 100
+# Vendored upstream code is diffed against upstream, not linted to our rules.
+extend-exclude = ["training"]
 
 # The rule set is declared explicitly rather than left to ruff's defaults:
 # those differ between ruff versions, so CI and a developer's machine can
