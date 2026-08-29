@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Training artefacts — regenerated from committed recipes, published as
+# Release assets, never committed. See CLAUDE.md "Artefact discipline".
+data/
+output/
+runs/
+*.pth
+*.lmdb
+*.mdb
+
+# OS
+.DS_Store

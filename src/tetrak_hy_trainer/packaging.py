@@ -1,0 +1,77 @@
+"""Emit ``tetrak_hy.yaml``, the config half of the EasyOCR custom model.
+
+EasyOCR's custom-model path (verified against easyocr 1.7.2 source) reads
+``<recog_network>.yaml`` from ``user_network_directory`` and takes four
+keys from it: ``character_list``, ``lang_list``, ``imgH`` and
+``network_params`` (the kwargs passed to the architecture module's
+``Model(num_class=..., **network_params)``). This module is the one place
+that file is produced, so the shipped yaml can never drift from
+:mod:`tetrak_hy_trainer.charset`.
+
+The network name is a Python module name — EasyOCR resolves it with
+``importlib.import_module`` — hence ``tetrak_hy``, underscores and all.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import yaml
+
+from tetrak_hy_trainer import charset
+
+NETWORK_NAME = "tetrak_hy"
+
+# Starting-point architecture parameters, mirroring EasyOCR's own
+# "generation2" configuration (its current standard models). The spike may
+# revise them; the yaml is regenerated, not edited, when it does.
+DEFAULT_NETWORK_PARAMS: dict[str, int] = {
+    "input_channel": 1,
+    "output_channel": 256,
+    "hidden_size": 256,
+}
+
+# EasyOCR's standard models take 64-pixel-high crops.
+DEFAULT_IMG_H = 64
+
+# 'hy' is the model's language; 'en' is declared too because the charset
+# carries basic Latin, and the yaml's lang_list gates which languages a
+# Reader may request.
+DEFAULT_LANG_LIST: tuple[str, ...] = ("hy", "en")
+
+
+def build_config(
+    network_params: dict[str, int] | None = None,
+    img_h: int = DEFAULT_IMG_H,
+    lang_list: tuple[str, ...] = DEFAULT_LANG_LIST,
+) -> dict:
+    """Return the yaml content as a dict, charset included.
+
+    Args:
+        network_params: Architecture kwargs; defaults to
+            :data:`DEFAULT_NETWORK_PARAMS`.
+        img_h: Input crop height in pixels.
+        lang_list: Languages a ``Reader`` may request of this model.
+
+    Returns:
+        The mapping to serialise as ``tetrak_hy.yaml``.
+    """
+    return {
+        "network_params": dict(network_params or DEFAULT_NETWORK_PARAMS),
+        "imgH": img_h,
+        "lang_list": list(lang_list),
+        "character_list": charset.character_list(),
+    }
+
+
+def write_yaml(directory: Path, **kwargs) -> Path:
+    """Write ``tetrak_hy.yaml`` into *directory* and return its path.
+
+    Keyword arguments are passed through to :func:`build_config`.
+    """
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    destination = directory / f"{NETWORK_NAME}.yaml"
+    with destination.open("w", encoding="utf-8") as handle:
+        yaml.safe_dump(build_config(**kwargs), handle, allow_unicode=True, sort_keys=False)
+    return destination

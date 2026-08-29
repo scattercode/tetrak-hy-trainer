@@ -1,0 +1,20 @@
+# Lefthook — git hooks manager. Install with: lefthook install
+# (requires the lefthook binary, e.g. `brew install lefthook`).
+#
+# Without lefthook, `git config core.hooksPath .githooks` still activates
+# the Conventional Commits check on its own.
+
+pre-commit:
+  parallel: true
+  commands:
+    ruff-lint:
+      glob: "*.py"
+      run: ruff check {staged_files}
+    ruff-format:
+      glob: "*.py"
+      run: ruff format --check {staged_files}
+
+commit-msg:
+  commands:
+    conventional:
+      run: .githooks/commit-msg {1}

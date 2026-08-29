@@ -1,0 +1,8 @@
+tetrak-hy-trainer
+Copyright 2026 Stephen Masters, Yvette Mankerian
+
+This product will incorporate training code derived from EasyOCR's trainer
+(https://github.com/JaidedAI/EasyOCR, Apache License 2.0, JaidedAI), itself a
+derivative of deep-text-recognition-benchmark
+(https://github.com/clovaai/deep-text-recognition-benchmark, Apache License
+2.0, NAVER Corp.). Attribution entries are added here as that code lands.

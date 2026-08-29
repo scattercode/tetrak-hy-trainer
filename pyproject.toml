@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tetrak-hy-trainer"
+# Static for now. If release automation ever arrives it should follow the
+# workspace pattern (git-cliff + tags), but the versioned artefact that
+# matters here is the weights release, not this package.
+version = "0.1.0"
+description = "Training pipeline for an Armenian text recogniser, packaged as an EasyOCR custom model"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Stephen Masters" },
+    { name = "Yvette Mankerian" },
+]
+# Deliberately thin until the spike pins the trainer's real requirements:
+# the charset and packaging modules need only the standard library plus
+# PyYAML. torch, the EasyOCR trainer's dependencies and the synthesis
+# tooling arrive with the stages that use them, each behind an extra.
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.5"]
+
+[project.urls]
+Homepage = "https://github.com/scattercode/tetrak-hy-trainer"
+Tetrak = "https://tetrak.dev/"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tetrak_hy_trainer"]
+
+[tool.ruff]
+line-length = 100
+
+# The rule set is declared explicitly rather than left to ruff's defaults:
+# those differ between ruff versions, so CI and a developer's machine can
+# disagree purely on which ruff they installed. Same arrangement as Tetrak.
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # import sorting
+    "UP",  # pyupgrade
+    "B",   # bugbear
+]
+ignore = [
+    # Line length is enforced by `ruff format`; what survives it is long
+    # string literals, which are more readable whole.
+    "E501",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["tetrak_hy_trainer"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
