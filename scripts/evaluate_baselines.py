@@ -30,7 +30,12 @@ from pathlib import Path
 from tetrak_ocr.accuracy import character_similarity, word_recall
 
 EVAL_DIR = Path(sys.argv[1])
-OUT_CSV = EVAL_DIR / "baselines.csv"
+# A filtered run must not clobber the full table: it writes its own file,
+# named for the selection.
+_only_arg = sys.argv[2] if len(sys.argv) > 2 else None
+OUT_CSV = EVAL_DIR / (
+    f"baselines_{_only_arg.replace(',', '_')}.csv" if _only_arg else "baselines.csv"
+)
 
 manifest = json.loads((EVAL_DIR / "manifest.json").read_text(encoding="utf-8"))
 pages = [
@@ -92,6 +97,33 @@ def claude(path):
     return ocr_image(path)
 
 
+def hye_paddle(path):
+    """Calfa's paddle-calfa-tiny recognition model in a stock PaddleOCR
+    pipeline. Requires HYE_PADDLE_DIR pointing at the model's inference/
+    directory (huggingface.co/calfa-ai/hye-paddle, CC BY-NC 4.0 -- measure,
+    never ship). Text is joined exactly as Tetrak's paddle backend joins its
+    own, so the two rows are comparable."""
+    import os
+
+    from paddleocr import PaddleOCR
+
+    global _hye_paddle_ocr
+    if "_hye_paddle_ocr" not in globals():
+        _hye_paddle_ocr = PaddleOCR(
+            text_recognition_model_name="PP-OCRv6_tiny_rec",
+            text_recognition_model_dir=os.environ["HYE_PADDLE_DIR"],
+            use_doc_orientation_classify=False,
+            use_doc_unwarping=False,
+            use_textline_orientation=False,
+        )
+    results = _hye_paddle_ocr.predict(str(path))
+    texts = []
+    for page in results:
+        if isinstance(page, dict) and "rec_texts" in page:
+            texts.extend(page["rec_texts"])
+    return "\n".join(texts)
+
+
 BACKENDS = [
     ("tesseract-eng", tesseract_eng),
     ("tesseract-hye", tesseract_hye),
@@ -101,10 +133,15 @@ BACKENDS = [
     ("paddle", paddle),
     ("marker", marker),
     ("claude", claude),
+    ("hye-paddle", hye_paddle),
 ]
+
+only = sys.argv[2].split(",") if len(sys.argv) > 2 else None
 
 rows = []
 for name, fn in BACKENDS:
+    if only is not None and name not in only:
+        continue
     sims, recs, secs = [], [], 0.0
     for image, expected, number in pages:
         started = time.perf_counter()
