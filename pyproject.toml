@@ -39,6 +39,8 @@ train = [
     "six>=1.16",
     "pillow>=10.0",
     "opencv-python-headless>=4.6",
+    # test.py scores validation with nltk's edit distance.
+    "nltk>=3.8",
 ]
 
 [project.urls]
