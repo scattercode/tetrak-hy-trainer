@@ -80,6 +80,15 @@ def main() -> int:
     parser.add_argument("--iters", type=int, default=300)
     parser.add_argument("--font", default=DEFAULT_FONT)
     parser.add_argument("--repeats", type=int, default=40)
+    parser.add_argument(
+        "--device",
+        default="cpu",
+        choices=["cpu", "mps"],
+        help="cpu (default) or Apple MPS. The vendored trainer binds a "
+        "module-level device at import; the spike overrides it after import. "
+        "DataParallel degrades to a passthrough wrapper off CUDA, so the "
+        "module. checkpoint prefix survives either way.",
+    )
     args = parser.parse_args()
 
     workdir = Path(tempfile.mkdtemp(prefix="tetrak_hy_train_spike_"))
@@ -113,9 +122,17 @@ def main() -> int:
     opt.character = opt.number + opt.symbol + opt.lang_char
     (workdir / "saved_models" / opt.experiment_name).mkdir(parents=True, exist_ok=True)
 
+    import torch
+    import train as train_module  # vendored  # noqa: E402
     from train import train  # vendored  # noqa: E402
 
-    print(f"training {args.iters} iterations on CPU...")
+    if args.device == "mps":
+        if not torch.backends.mps.is_available():
+            print("FAILED: --device mps requested but MPS is unavailable", file=sys.stderr)
+            return 1
+        train_module.device = torch.device("mps")
+
+    print(f"training {args.iters} iterations on {args.device}...")
     try:
         train(opt, amp=False)
     except SystemExit:
