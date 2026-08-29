@@ -57,6 +57,16 @@ breaks loading in the field:
 - A missing `hy` dictionary in EasyOCR is tolerated (greedy decode needs
   none); an Armenian wordlist is a later beam-search upgrade, not a
   launch requirement.
+- **Load with `Reader(['en'], recog_network='tetrak_hy')`, not `['hy']`.**
+  A spike finding (2026-08-29, `scripts/spike_easyocr_loading.py`):
+  `setLanguageList` reads `easyocr/character/<lang>_char.txt` for every
+  requested language and no `hy_char.txt` ships with EasyOCR, so `['hy']`
+  raises FileNotFoundError. The file is irrelevant for a custom model —
+  the decode filter is `set(model charset) − set(lang_char)` and
+  `lang_char` always includes the yaml's full `character_list`, so the
+  filter is empty whichever language is requested. The yaml's own
+  `lang_list` keeps `hy` first for self-description; the *loading*
+  incantation uses `en`.
 
 ### The charset is a single source of truth
 
