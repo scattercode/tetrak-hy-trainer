@@ -124,6 +124,27 @@ def hye_paddle(path):
     return "\n".join(texts)
 
 
+def tetrak_hy_v0(path):
+    """Our own model: a tetrak_hy bundle named by TETRAK_HY_BUNDLE, loaded
+    through stock EasyOCR and joined line-by-line exactly as Tetrak's
+    easyocr backend joins its output, so the rows are comparable."""
+    import os
+
+    import easyocr
+
+    global _tetrak_hy_reader
+    if "_tetrak_hy_reader" not in globals():
+        bundle = os.environ["TETRAK_HY_BUNDLE"]
+        _tetrak_hy_reader = easyocr.Reader(
+            ["en"],  # no hy_char.txt ships with EasyOCR; inert for custom models
+            recog_network="tetrak_hy",
+            user_network_directory=bundle,
+            model_storage_directory=bundle,
+            verbose=False,
+        )
+    return "\n".join(_tetrak_hy_reader.readtext(str(path), detail=0, paragraph=False))
+
+
 BACKENDS = [
     ("tesseract-eng", tesseract_eng),
     ("tesseract-hye", tesseract_hye),
@@ -134,6 +155,7 @@ BACKENDS = [
     ("marker", marker),
     ("claude", claude),
     ("hye-paddle", hye_paddle),
+    ("tetrak-hy-v0", tetrak_hy_v0),
 ]
 
 only = sys.argv[2].split(",") if len(sys.argv) > 2 else None
