@@ -125,4 +125,9 @@ ruff check src tests && ruff format --check src tests
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/),
 enforced by the hook in `.githooks/` (`git config core.hooksPath .githooks`
-after cloning, or `lefthook install`).
+after cloning, or `lefthook install`). Releases and `CHANGELOG.md` are
+generated from those commits automatically on every push to `main`.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow — checks,
+the dependency lockfile, and what the automation expects — and
+[SECURITY.md](SECURITY.md) for how to report a vulnerability.

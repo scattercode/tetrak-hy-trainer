@@ -109,9 +109,42 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
 
 pytest                 # fast, no OCR stack or GPU needed
-ruff check src tests
-ruff format src tests
+ruff check src tests tools scripts
+ruff format src tests tools scripts
+uv lock --check        # the lockfile matches pyproject.toml
 ```
+
+## Dependencies and the lockfile
+
+Ranges live in `pyproject.toml`; the fully resolved tree (all extras, torch
+included) lives in `uv.lock`, which exists so security scanning — Trivy in
+CI and on a weekly schedule, plus Dependabot — sees real versions rather
+than ranges. After any dependency change run `uv lock` and commit the lock
+alongside `pyproject.toml`; both the pre-commit hook and CI fail on a stale
+one. The lock is universal (platform-independent), so it never needs
+regenerating just because the machine changed.
+
+## Releases and changelog
+
+Releases are automated, the same arrangement as Tetrak — do not perform
+them by hand.
+
+- Every push to `main` runs `release.yml`: `tools/next_version.py` computes
+  the next semantic version from the Conventional Commit history (covered
+  by `tests/test_next_version.py`), git-cliff prepends the new section to
+  `CHANGELOG.md`, and the workflow tags and publishes a GitHub Release.
+- Never edit `CHANGELOG.md` by hand — change the commit messages or the
+  `commit_parsers` in `cliff.toml` instead.
+- Never create tags or Releases manually. Trained weights are *attached* to
+  the automatically created releases as assets, with checksum and
+  provenance record.
+- **The package version comes from the git tag**, via `hatch-vcs`. Do not
+  add a `version = "..."` literal back to `pyproject.toml` — nothing
+  updates it, so it silently goes stale.
+  `src/tetrak_hy_trainer/_version.py` is generated at build time and
+  gitignored.
+- `fix` → patch, `feat` → minor, `!` → major. Choose types accordingly.
+- Tooling commits use `chore(release):` so the changelog parser skips them.
 
 ## Where decisions live
 
