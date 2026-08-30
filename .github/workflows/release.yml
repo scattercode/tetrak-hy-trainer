@@ -1,0 +1,94 @@
+# Automated release — the workspace pattern, ported from Tetrak.
+#
+# On every push/merge to main, tools/next_version.py computes the next
+# semantic version from the Conventional Commit history since the last tag,
+# git-cliff prepends that version's section to CHANGELOG.md, the commit is
+# tagged, and a GitHub Release is published whose notes are that section.
+#
+# The release commit is pushed with GITHUB_TOKEN, which by design does not
+# retrigger workflows — so this never loops. If there are no releasable
+# commits since the last tag, the job is a no-op.
+#
+# Weights are attached to these releases by hand after training runs — the
+# workflow creates the release; it does not produce artefacts itself.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # Belt and braces: never react to our own release commit.
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install git-cliff
+        uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff
+
+      # Deliberately not `git cliff --bumped-version`: that buckets the whole
+      # history into releases first and goes wrong on merge topology — Tetrak
+      # had a `feat!` silently skipped by it. tools/next_version.py reads one
+      # commit range instead and is covered by tests/test_next_version.py.
+      - name: Compute next version
+        id: version
+        run: python3 tools/next_version.py --github --explain
+
+      - name: Guard against a silently skipped release
+        if: steps.version.outputs.release != 'true'
+        run: |
+          latest="$(git describe --tags --abbrev=0 2>/dev/null || echo '')"
+          echo "No releasable change since ${latest:-repo start}."
+          # A merge to main carrying a feat or fix must produce a release. If
+          # one does not, that is the failure this job exists to catch, and it
+          # is reported rather than passed over in silence.
+          if git log --no-merges --format='%s' "${latest:+$latest..}HEAD" \
+               | grep -qE '^(feat|fix|perf|revert)(\([^)]*\))?!?:'; then
+            echo "::error::Releasable commits are present but no version was computed."
+            exit 1
+          fi
+
+      - name: Update changelog, tag and release
+        if: steps.version.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.next }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # The very first release predates the changelog: git-cliff's
+          # --prepend errors on a missing file but handles an empty one
+          # correctly (header, then the new section).
+          touch CHANGELOG.md
+
+          # --prepend, not --output: regenerating the whole changelog re-runs
+          # git-cliff's release bucketing over the entire history, which is
+          # exactly what is unreliable on merge topology. Prepending writes
+          # only the new section and leaves the settled ones alone.
+          git cliff --tag "$VERSION" --unreleased --prepend CHANGELOG.md
+          git cliff --tag "$VERSION" --unreleased --strip all --output RELEASE_NOTES.md
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add CHANGELOG.md
+          git commit -m "chore(release): ${VERSION#v}"
+          git tag -a "$VERSION" -m "$VERSION"
+          git push origin HEAD:main
+          git push origin "$VERSION"
+
+          gh release create "$VERSION" --title "$VERSION" --notes-file RELEASE_NOTES.md
