@@ -94,8 +94,11 @@ family, GHEA faces and Arian AMU (all OFL) for fonts.
 
 ## Licence
 
-Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE). Training
-code will derive in part from EasyOCR's trainer (Apache 2.0), itself
+Apache License 2.0 — see
+[LICENSE](https://github.com/scattercode/tetrak-hy-trainer/blob/main/LICENSE)
+and
+[NOTICE](https://github.com/scattercode/tetrak-hy-trainer/blob/main/NOTICE).
+Training code will derive in part from EasyOCR's trainer (Apache 2.0), itself
 derived from NAVER's
 [deep-text-recognition-benchmark](https://github.com/clovaai/deep-text-recognition-benchmark)
 (Apache 2.0).
@@ -128,6 +131,9 @@ enforced by the hook in `.githooks/` (`git config core.hooksPath .githooks`
 after cloning, or `lefthook install`). Releases and `CHANGELOG.md` are
 generated from those commits automatically on every push to `main`.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow — checks,
-the dependency lockfile, and what the automation expects — and
-[SECURITY.md](SECURITY.md) for how to report a vulnerability.
+See
+[CONTRIBUTING.md](https://github.com/scattercode/tetrak-hy-trainer/blob/main/CONTRIBUTING.md)
+for the full workflow — checks, the dependency lockfile, and what the
+automation expects — and
+[SECURITY.md](https://github.com/scattercode/tetrak-hy-trainer/blob/main/SECURITY.md)
+for how to report a vulnerability.

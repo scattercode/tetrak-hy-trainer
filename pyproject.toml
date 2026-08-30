@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling>=1.27", "hatch-vcs"]   # 1.27+ understands PEP 639
 build-backend = "hatchling.build"
 
 [project]
@@ -13,10 +13,24 @@ dynamic = ["version"]
 description = "Training pipeline for an Armenian text recogniser, packaged as an EasyOCR custom model"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { file = "LICENSE" }
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 authors = [
     { name = "Stephen Masters" },
     { name = "Yvette Mankerian" },
+]
+keywords = ["ocr", "armenian", "easyocr", "text-recognition", "archives"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: Armenian",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+    "Topic :: Text Processing",
 ]
 # Deliberately thin until the spike pins the trainer's real requirements:
 # the charset and packaging modules need only the standard library plus
@@ -53,6 +67,9 @@ train = [
 [project.urls]
 Homepage = "https://github.com/scattercode/tetrak-hy-trainer"
 Tetrak = "https://tetrak.dev/"
+Source = "https://github.com/scattercode/tetrak-hy-trainer"
+Changelog = "https://github.com/scattercode/tetrak-hy-trainer/blob/main/CHANGELOG.md"
+Issues = "https://github.com/scattercode/tetrak-hy-trainer/issues"
 
 [tool.hatch.version]
 source = "vcs"
