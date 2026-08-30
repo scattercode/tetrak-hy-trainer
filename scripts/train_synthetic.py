@@ -1,0 +1,292 @@
+#!/usr/bin/env python3
+"""The synthetic pre-train orchestrator (v0 was its first run; v1 default).
+
+Samples *lines* of consecutive tokens from harvested proofread text (the
+v0 lesson: CRAFT hands the recogniser multi-word line crops, and a model
+trained on single words had never seen a space), renders them across the
+provided fonts at sizes down to real scan scale, degrades them with the
+Stage-2-lite pipeline (:mod:`tetrak_hy_trainer.augment`), trains, packages
+the best checkpoint as a ``tetrak_hy`` bundle — and, when ``--eval-dir``
+points at a harvested page set, scores the result against the real scans
+so the honest number is in the log before anyone wakes up.
+
+v0 (2026-08-30, recorded in Tetrak's benchmarks note) reproduces with:
+``--line-tokens-max 1 --no-augment --min-size 36``.
+
+Everything lands under ``runs/<run-name>/``:
+
+    all_data/            rendered crops + labels.csv (trainer format)
+    saved_models/<name>/ checkpoints; best_accuracy.pth updates throughout
+    bundle/              packaged tetrak_hy.{yaml,py,pth} on completion
+    train.log            stdout of the run (the caller redirects)
+
+Run (overnight, Mac):
+    PYTORCH_ENABLE_MPS_FALLBACK=1 caffeinate -ims \\
+        python scripts/train_synthetic.py --device mps --iters 150000 \\
+        --eval-dir <harvested-eval-pages>
+
+Interrupted? The checkpoint survives; re-package with ``--package-only``.
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import os
+import random
+import shutil
+import sys
+import time
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO / "training"))
+
+from tetrak_hy_trainer import augment, charset, packaging, synth, train_config  # noqa: E402
+
+
+def clean_token_runs(harvest_dirs: list[Path]) -> list[list[str]]:
+    """Runs of consecutive charset-clean tokens, per stretch of page text."""
+    allowed = set(charset.character_list())
+    runs: list[list[str]] = []
+    for harvest_dir in harvest_dirs:
+        for text_file in sorted((harvest_dir / "text").glob("*.txt")):
+            current: list[str] = []
+            for token in text_file.read_text(encoding="utf-8").split():
+                if 1 <= len(token) <= 24 and set(token) <= allowed:
+                    current.append(token)
+                elif current:
+                    runs.append(current)
+                    current = []
+            if current:
+                runs.append(current)
+    return runs
+
+
+def build_line_samples(
+    harvest_dirs: list[Path],
+    max_samples: int,
+    rng: random.Random,
+    tokens_max: int,
+    chars_max: int = 30,
+) -> list[str]:
+    """Sample text lines: 1..tokens_max consecutive tokens, length-capped.
+
+    One candidate per token position (with a random length draw), sampled
+    down to *max_samples* — so common vocabulary appears at natural
+    frequency and every page contributes.
+    """
+    candidates: list[str] = []
+    for run in clean_token_runs(harvest_dirs):
+        for start in range(len(run)):
+            take = rng.randint(1, tokens_max)
+            line = " ".join(run[start : start + take])
+            if len(line) <= chars_max:
+                candidates.append(line)
+    if len(candidates) < 1000:
+        raise SystemExit(f"only {len(candidates)} line candidates -- harvest more text first")
+    rng.shuffle(candidates)
+    return candidates[:max_samples]
+
+
+def render_corpus(
+    run_dir: Path,
+    samples: list[str],
+    fonts: list[Path],
+    sizes: tuple[int, ...],
+    repeats: int,
+    use_augment: bool,
+    seed: int = 0,
+) -> tuple[Path, int]:
+    """Render train/val folders in the trainer's format; return (root, count).
+
+    Validation gets the same rendering *and degradation* treatment —
+    v0's crisp validation read 99.7% while real scans read 0.08, so a
+    val set that never sees a degradation measures nothing useful.
+    """
+    from PIL import ImageFont
+
+    rng = random.Random(seed)
+    faces = [ImageFont.truetype(str(path), size) for path in fonts for size in sizes]
+
+    data_root = run_dir / "all_data"
+    train_dir = data_root / "syn_train"
+    val_dir = data_root / "syn_val"
+    for directory in (train_dir, val_dir):
+        directory.mkdir(parents=True, exist_ok=True)
+
+    train_rows, val_rows = [], []
+    for index, line in enumerate(samples):
+        is_val = index % 40 == 0
+        for repeat in range(1 if is_val else repeats):
+            image = synth.render_word(line, rng.choice(faces), jitter=rng)
+            if use_augment:
+                image = augment.degrade(image, rng)
+            name = f"{index:06d}_{repeat}.png"
+            if is_val:
+                image.save(val_dir / name)
+                val_rows.append((name, line))
+            else:
+                image.save(train_dir / name)
+                train_rows.append((name, line))
+
+    for directory, rows in ((train_dir, train_rows), (val_dir, val_rows)):
+        with (directory / "labels.csv").open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["filename", "words"])
+            writer.writerows(rows)
+    return data_root, len(train_rows)
+
+
+def package(run_dir: Path, experiment: str) -> Path:
+    """Package the best checkpoint as a tetrak_hy bundle; return its dir."""
+    checkpoint = run_dir / "saved_models" / experiment / "best_accuracy.pth"
+    if not checkpoint.exists():
+        raise SystemExit(f"no checkpoint at {checkpoint}")
+    bundle = run_dir / "bundle"
+    packaging.write_bundle(bundle)
+    shutil.copyfile(checkpoint, bundle / f"{packaging.NETWORK_NAME}.pth")
+    print(f"packaged: {bundle}", flush=True)
+    return bundle
+
+
+def evaluate_pages(bundle: Path, eval_dir: Path) -> None:
+    """Score the packaged model against harvested real pages, in the log.
+
+    Same loading and line-joining as Tetrak's easyocr backend, same
+    metrics as the Armenian benchmarks note, so the number is comparable
+    the moment it prints.
+    """
+    import json
+
+    import easyocr
+    from tetrak_ocr.accuracy import character_similarity, word_recall
+
+    reader = easyocr.Reader(
+        ["en"],  # no hy_char.txt ships with EasyOCR; inert for custom models
+        recog_network=packaging.NETWORK_NAME,
+        user_network_directory=str(bundle),
+        model_storage_directory=str(bundle),
+        verbose=False,
+    )
+    manifest = json.loads((eval_dir / "manifest.json").read_text(encoding="utf-8"))
+    sims, recs = [], []
+    for entry in manifest["pages"]:
+        image = eval_dir / "images" / f"{entry['page_number']}.jpg"
+        if not image.exists():
+            continue
+        expected = (eval_dir / entry["text"]).read_text(encoding="utf-8")
+        text = "\n".join(reader.readtext(str(image), detail=0, paragraph=False))
+        sim, rec = character_similarity(text, expected), word_recall(text, expected)
+        sims.append(sim)
+        recs.append(rec)
+        print(f"EVAL p{entry['page_number']} chr={sim:.3f} wrd={rec:.3f}", flush=True)
+    if sims:
+        print(
+            f"EVAL AVERAGE chr={sum(sims) / len(sims):.4f} wrd={sum(recs) / len(recs):.4f} "
+            f"n={len(sims)}",
+            flush=True,
+        )
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--run-name", default="v1")
+    parser.add_argument("--harvest-dirs", nargs="+", type=Path, default=None)
+    parser.add_argument("--iters", type=int, default=150_000)
+    parser.add_argument("--device", default="cpu", choices=["cpu", "mps"])
+    parser.add_argument("--max-samples", type=int, default=60_000)
+    parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--line-tokens-max", type=int, default=4)
+    parser.add_argument("--min-size", type=int, default=18)
+    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--val-interval", type=int, default=2_000)
+    parser.add_argument("--augment", dest="augment", action="store_true", default=True)
+    parser.add_argument("--no-augment", dest="augment", action="store_false")
+    parser.add_argument("--eval-dir", type=Path, default=None)
+    parser.add_argument("--package-only", action="store_true")
+    args = parser.parse_args()
+
+    run_dir = (REPO / "runs" / args.run_name).resolve()
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.package_only:
+        package(run_dir, args.run_name)
+        return 0
+
+    harvest_dirs = args.harvest_dirs or [
+        directory
+        for directory in [
+            REPO / "runs" / "v0" / "harvest",
+            *sorted((REPO / "runs" / "v1").glob("harvest-*")),
+        ]
+        if directory.is_dir()
+    ]
+    print(f"harvest dirs: {[str(d) for d in harvest_dirs]}", flush=True)
+
+    started = time.time()
+    rng = random.Random(0)
+    samples = build_line_samples(harvest_dirs, args.max_samples, rng, args.line_tokens_max)
+    print(f"line samples: {len(samples)}", flush=True)
+
+    fonts = sorted((REPO / "runs" / "v0" / "fonts").glob("*.tt*"))
+    system_font = Path("/System/Library/Fonts/Supplemental/Mshtakan.ttc")
+    if system_font.exists():
+        fonts.append(system_font)
+    if not fonts:
+        raise SystemExit("no fonts found")
+    print(f"fonts: {[f.name for f in fonts]}", flush=True)
+
+    sizes = tuple(s for s in (18, 22, 28, 36, 48, 64) if s >= args.min_size)
+    data_root, crops = render_corpus(run_dir, samples, fonts, sizes, args.repeats, args.augment)
+    print(f"rendered {crops} training crops in {time.time() - started:.0f}s", flush=True)
+
+    config = train_config.build_config(
+        experiment_name=args.run_name,
+        train_data=str(data_root),
+        valid_data=str(data_root / "syn_val"),
+        select_data="syn_train",
+        num_iter=args.iters,
+        batch_size=args.batch_size,
+        val_interval=args.val_interval,
+        workers=0,
+        batch_max_length=60,
+    )
+    config["imgW"] = 800  # room for four-token lines at 64 px height
+
+    os.chdir(run_dir)
+    from tetrak_hy_trainer import trainer_compat
+
+    trainer_compat.install()
+    import torch
+    import train as train_module  # vendored  # noqa: E402
+    from train import train  # vendored  # noqa: E402
+    from utils import AttrDict  # vendored  # noqa: E402
+
+    if args.device == "mps":
+        if not torch.backends.mps.is_available():
+            raise SystemExit("--device mps requested but MPS is unavailable")
+        if os.environ.get("PYTORCH_ENABLE_MPS_FALLBACK") != "1":
+            raise SystemExit("MPS needs PYTORCH_ENABLE_MPS_FALLBACK=1 (CTC loss has no MPS kernel)")
+        train_module.device = torch.device("mps")
+
+    opt = AttrDict(config)
+    opt.character = opt.number + opt.symbol + opt.lang_char
+    (run_dir / "saved_models" / opt.experiment_name).mkdir(parents=True, exist_ok=True)
+
+    print(f"training {args.iters} iterations on {args.device}...", flush=True)
+    try:
+        train(opt, amp=False)
+    except SystemExit:
+        pass  # upstream train() sys.exit()s on completion
+
+    bundle = package(run_dir, args.run_name)
+    if args.eval_dir is not None:
+        evaluate_pages(bundle, args.eval_dir.resolve())
+    print(f"total wall time: {(time.time() - started) / 3600:.1f}h", flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
