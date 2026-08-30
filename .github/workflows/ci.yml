@@ -26,10 +26,60 @@ jobs:
       - name: Install
         run: pip install -e '.[dev]'
 
+      # uv.lock pins the full resolved dependency tree (all extras, torch
+      # included) so scanners see real versions, not ranges. The lock is
+      # universal, so checking it on Linux validates what was written on a
+      # Mac. Regenerate with `uv lock` after any pyproject.toml change.
+      - name: Lockfile is current
+        run: |
+          pip install --quiet uv
+          uv lock --check
+
       - name: Lint
         run: |
-          ruff check src tests
-          ruff format --check src tests
+          ruff check src tests tools scripts
+          ruff format --check src tests tools scripts
 
       - name: Test
         run: pytest
+
+  # Same arrangement as Tetrak and scattercode.dev. The committed uv.lock is
+  # what makes the scan worthwhile for Python: pyproject.toml declares ranges,
+  # but the lock carries every resolved version, so known CVEs in transitive
+  # dependencies surface here rather than in a user's install.
+  trivy:
+    name: Trivy scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan for vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: library
+          severity: HIGH,CRITICAL
+
+      # A source-tree SBOM. Because uv.lock is committed, this resolves the
+      # full Python dependency tree — unlike a bare pyproject.toml scan.
+      - name: Generate SBOM
+        uses: aquasecurity/trivy-action@v0.36.0
+        if: always()
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: cyclonedx
+          output: sbom.cdx.json
+          exit-code: '0'
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sbom-source-tree
+          path: sbom.cdx.json
+          retention-days: 90
