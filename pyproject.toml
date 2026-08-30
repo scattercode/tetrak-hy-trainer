@@ -27,7 +27,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.5"]
+# pillow sits here as well as in [train]: the augment and synth tests draw
+# their own test cards, so CI genuinely exercises them with nothing heavier
+# installed. Its absence broke every CI run from the moment those tests
+# landed — collection failed on `from PIL import Image` before a single
+# test ran.
+dev = ["pytest>=8.0", "ruff>=0.5", "pillow>=10.0"]
 # What the vendored trainer (training/) imports, beyond the core deps.
 # Heavy by design and never installed in CI.
 train = [
