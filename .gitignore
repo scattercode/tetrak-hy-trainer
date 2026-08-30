@@ -8,6 +8,9 @@ build/
 .pytest_cache/
 .ruff_cache/
 
+# Written at build time by hatch-vcs; the version lives in the git tag.
+src/tetrak_hy_trainer/_version.py
+
 # Training artefacts — regenerated from committed recipes, published as
 # Release assets, never committed. See CLAUDE.md "Artefact discipline".
 data/

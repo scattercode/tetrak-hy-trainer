@@ -1,13 +1,15 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "tetrak-hy-trainer"
-# Static for now. If release automation ever arrives it should follow the
-# workspace pattern (git-cliff + tags), but the versioned artefact that
-# matters here is the weights release, not this package.
-version = "0.1.0"
+# Derived from the git tag, the workspace pattern (see Tetrak): release.yml
+# computes the next version from the commit history and tags it, so a literal
+# here would be a second source of truth that nothing updates. The weights
+# release remains the artefact that matters most; the package version now
+# simply follows the same tags.
+dynamic = ["version"]
 description = "Training pipeline for an Armenian text recogniser, packaged as an EasyOCR custom model"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -51,6 +53,14 @@ train = [
 [project.urls]
 Homepage = "https://github.com/scattercode/tetrak-hy-trainer"
 Tetrak = "https://tetrak.dev/"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+# Writes the resolved version into the package at build time, so an installed
+# copy can report it without git present. Generated, therefore gitignored.
+version-file = "src/tetrak_hy_trainer/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/tetrak_hy_trainer"]
