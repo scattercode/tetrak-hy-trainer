@@ -21,6 +21,19 @@ Composition
 - Western digits and basic Latin, because 19th–20th century Armenian print
   mixes in Latin names, numerals and abbreviations.
 - Common punctuation shared across scripts.
+- v2 additions (:data:`V2_ADDITIONS`): U+2024 ONE DOT LEADER, the ASE
+  transcripts' abbreviation dot (``Ա․``, ``Գրկ․``), and ``°``. v1's error
+  analysis (``tetrak`` repo, ``product/research/
+  armenian-v1-error-analysis.md``) found U+2024 absent from v1's charset
+  entirely, so the training pipeline's "drop any crop containing an
+  out-of-charset character" step silently filtered every crop containing
+  it and v1 could never emit it at all — 518 words (5.8% of the ten
+  evaluation pages' expected words) unwinnable by construction. Appended
+  at the end of :func:`character_list` rather than folded into
+  :data:`ARMENIAN_PUNCTUATION`, so the existing charset's prefix and the
+  ``ա`` index the v1 tests pin are untouched by the append itself — the
+  charset is still a new, incompatible version (see below), just a
+  minimal diff against v1's.
 
 The space character is a flag (:data:`INCLUDE_SPACE`) rather than a fact:
 whether EasyOCR's trainer and inference path expect it in
@@ -44,6 +57,12 @@ ARMENIAN_PUNCTUATION = "՝՛՞՜։֊«»"
 DIGITS = "0123456789"
 LATIN = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 COMMON_PUNCTUATION = ".,:;!?'\"()-–—/%&+=*"
+
+# U+2024 ONE DOT LEADER (the transcripts' abbreviation dot) and the degree
+# sign — see the module docstring's "v2 additions" note for why these two
+# and not more. Appended after COMMON_PUNCTUATION, not inserted earlier,
+# to keep the diff against v1's charset a pure append.
+V2_ADDITIONS = "․°"
 
 # Confirmed at spike time against what the EasyOCR trainer actually
 # expects; see the module docstring.
@@ -71,6 +90,7 @@ def character_list(include_space: bool | None = None) -> str:
         + DIGITS
         + LATIN
         + COMMON_PUNCTUATION
+        + V2_ADDITIONS
     )
     if include_space:
         characters += " "

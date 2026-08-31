@@ -50,3 +50,18 @@ def test_order_is_stable() -> None:
     characters = charset.character_list()
     assert characters.startswith("ԱԲԳԴ")
     assert characters.index("ա") == 38
+
+
+def test_v2_additions_are_present() -> None:
+    """U+2024 ONE DOT LEADER (the transcripts' abbreviation dot) and the
+    degree sign — see the module docstring's "v2 additions" note."""
+    characters = charset.character_list()
+    assert "․" in characters
+    assert "°" in characters
+
+
+def test_v2_additions_are_appended_last() -> None:
+    """Appended after COMMON_PUNCTUATION so the v1 prefix (and the ``ա``
+    index test_order_is_stable pins) is untouched by the append itself."""
+    characters = charset.character_list(include_space=False)
+    assert characters.endswith(charset.V2_ADDITIONS)
