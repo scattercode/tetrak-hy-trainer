@@ -48,7 +48,7 @@ dependencies = [
 # installed. Its absence broke every CI run from the moment those tests
 # landed — collection failed on `from PIL import Image` before a single
 # test ran.
-dev = ["pytest>=8.0", "ruff>=0.5", "pillow>=10.0"]
+dev = ["pytest>=8.0", "ruff>=0.5", "pillow>=10.0", "fonttools>=4.0"]
 # What the vendored trainer (training/) imports, beyond the core deps.
 # Heavy by design and never installed in CI.
 train = [
@@ -62,6 +62,9 @@ train = [
     "opencv-python-headless>=4.6",
     # test.py scores validation with nltk's edit distance.
     "nltk>=3.8",
+    # Font glyph-coverage checks in synth.py, so train_synthetic.py can
+    # avoid rendering a character through a font that lacks it.
+    "fonttools>=4.0",
 ]
 
 [project.urls]

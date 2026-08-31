@@ -104,11 +104,28 @@ def render_corpus(
     Validation gets the same rendering *and degradation* treatment —
     v0's crisp validation read 99.7% while real scans read 0.08, so a
     val set that never sees a degradation measures nothing useful.
+
+    Font choice per line is glyph-coverage-aware: a font missing even one
+    character in the line is excluded from that line's draw, not just
+    charset-eligible. Membership in the canonical charset says nothing
+    about whether a *specific* font can actually draw a character — found
+    by checking whether Mshtakan, one of the three faces every crop is
+    rendered in, could draw the charset's v2 additions (it cannot; see
+    synth.missing_glyphs). Rendering through a face without the glyph
+    would silently teach the model the wrong shape for whatever that face
+    is missing, indistinguishable by eye from a genuine narrow glyph.
     """
     from PIL import ImageFont
 
     rng = random.Random(seed)
-    faces = [ImageFont.truetype(str(path), size) for path in fonts for size in sizes]
+    gaps_by_path = {
+        path: synth.missing_glyphs(str(path), charset.character_list()) for path in fonts
+    }
+    faces = [
+        (ImageFont.truetype(str(path), size), gaps_by_path[path])
+        for path in fonts
+        for size in sizes
+    ]
 
     data_root = run_dir / "all_data"
     train_dir = data_root / "syn_train"
@@ -118,9 +135,13 @@ def render_corpus(
 
     train_rows, val_rows = [], []
     for index, line in enumerate(samples):
+        needed = set(line)
+        eligible = [face for face, gaps in faces if not (gaps & needed)]
+        if not eligible:
+            raise SystemExit(f"no font covers every character in {line!r}")
         is_val = index % 40 == 0
         for repeat in range(1 if is_val else repeats):
-            image = synth.render_word(line, rng.choice(faces), jitter=rng)
+            image = synth.render_word(line, rng.choice(eligible), jitter=rng)
             if use_augment:
                 image = augment.degrade(image, rng)
             name = f"{index:06d}_{repeat}.png"
@@ -243,6 +264,10 @@ def main() -> int:
     if not fonts:
         raise SystemExit("no fonts found")
     print(f"fonts: {[f.name for f in fonts]}", flush=True)
+    for font in fonts:
+        gaps = synth.missing_glyphs(str(font), charset.character_list())
+        if gaps:
+            print(f"  {font.name} has no glyph for: {sorted(gaps)!r}", flush=True)
 
     sizes = tuple(s for s in (18, 22, 28, 36, 48, 64) if s >= args.min_size)
     data_root, crops = render_corpus(run_dir, samples, fonts, sizes, args.repeats, args.augment)

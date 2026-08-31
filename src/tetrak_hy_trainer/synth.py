@@ -9,18 +9,68 @@ replaces the *content* while keeping this output contract.
 
 Words are filtered to the canonical charset, because the trainer drops
 (or mis-encodes) labels containing characters outside ``opt.character``
-and a silent filter is how a training set quietly shrinks.
+and a silent filter is how a training set quietly shrinks. Charset
+membership is necessary but not sufficient, though: :func:`missing_glyphs`
+checks whether a *specific font* actually has a glyph for a character
+that is otherwise in-charset, which membership alone cannot tell you.
 """
 
 from __future__ import annotations
 
 import csv
 import random
+from functools import lru_cache
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
 from tetrak_hy_trainer import charset
+
+
+@lru_cache
+def _cmap(font_path: str) -> frozenset[int]:
+    """The Unicode code points *font_path* has a real glyph for.
+
+    Cached per path: a font file is read once no matter how many sizes or
+    render calls use it. ``fontTools`` reads the ``cmap`` table directly
+    rather than going through Pillow/FreeType, which has no public,
+    version-stable way to ask "does this font have a glyph for this
+    character" -- it happily draws the ``.notdef`` fallback glyph for a
+    missing one, visually indistinguishable from a genuine narrow glyph
+    unless compared pixel-for-pixel against another missing character.
+    That is not a hypothetical: Mshtakan, the macOS system font this
+    trainer renders one third of its synthetic crops with, has no glyph
+    for Latin ``A``/``x`` or for either of the charset's v2 additions
+    (U+2024, ``°``) -- found by exactly this comparison while verifying
+    those additions actually render (product/research/
+    armenian-v1-error-analysis.md's charset fix). A corpus built without
+    this check silently teaches the model the wrong shape for whatever a
+    face is missing, for however many crops chose that face.
+    """
+    from fontTools.ttLib import TTFont
+
+    font = TTFont(font_path, fontNumber=0, lazy=True)
+    try:
+        return frozenset(font.getBestCmap() or {})
+    finally:
+        font.close()
+
+
+def missing_glyphs(font_path: str, characters: str) -> frozenset[str]:
+    """The characters in *characters* that *font_path* has no glyph for.
+
+    Args:
+        font_path: A TTF/TTC/OTF path. ``.ttc`` collections are checked
+            against their first font, matching how :func:`render_word`
+            and ``ImageFont.truetype`` load them elsewhere in this module.
+        characters: Any string; duplicates and order do not matter.
+
+    Returns:
+        The distinct characters in *characters* absent from the font's
+        cmap. Empty means the font covers everything asked of it.
+    """
+    cmap = _cmap(font_path)
+    return frozenset(character for character in characters if ord(character) not in cmap)
 
 
 def render_word(

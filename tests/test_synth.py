@@ -26,6 +26,27 @@ def test_stray_characters_are_rejected_not_filtered(tmp_path: Path) -> None:
 
 
 @needs_font
+class TestMissingGlyphs:
+    """Mshtakan is a real, reproducible example: it has no glyph for the
+    charset's v2 additions (U+2024, degree sign), found while verifying
+    those additions actually render rather than falling back to a
+    fallback glyph indistinguishable by eye from a genuine one."""
+
+    def test_finds_the_known_gap(self) -> None:
+        assert synth.missing_glyphs(FONT, "․°") == {"․", "°"}
+
+    def test_armenian_letters_are_covered(self) -> None:
+        assert synth.missing_glyphs(FONT, "աբգդ") == frozenset()
+
+    def test_only_reports_the_actually_missing_characters(self) -> None:
+        # "․" is missing, "ա" is not -- exactly one of the two comes back
+        assert synth.missing_glyphs(FONT, "ա․") == {"․"}
+
+    def test_empty_input_has_nothing_missing(self) -> None:
+        assert synth.missing_glyphs(FONT, "") == frozenset()
+
+
+@needs_font
 def test_dataset_layout_matches_the_trainer_contract(tmp_path: Path) -> None:
     folder = synth.write_dataset(tmp_path, "hy_t", ["գիրք", "և"], FONT, repeats=3)
 
