@@ -71,7 +71,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
-from tetrak_hy_trainer import align, charset, heldout  # noqa: E402
+from tetrak_hy_trainer import align, charset, heldout, synth  # noqa: E402
 from tetrak_hy_trainer.align import Detection, Tier  # noqa: E402
 
 # Boxes shorter than this are detector noise -- rules, speckle, the edge of
@@ -330,10 +330,10 @@ def main() -> int:
         )
 
     for split, folder in folders.items():
-        with (folder / "labels.csv").open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.writer(handle)
-            writer.writerow(["filename", "words"])
-            writer.writerows(rows[split])
+        # Not csv.writer: it quotes labels containing a comma, and the
+        # trainer's regex split keeps the quotation marks. See
+        # synth.write_labels -- this cost v1 21% of its crops.
+        synth.write_labels(folder, rows[split])
 
     with (args.out / "crops.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(

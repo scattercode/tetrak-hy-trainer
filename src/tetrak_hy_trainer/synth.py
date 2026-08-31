@@ -17,8 +17,8 @@ that is otherwise in-charset, which membership alone cannot tell you.
 
 from __future__ import annotations
 
-import csv
 import random
+from collections.abc import Iterable
 from functools import lru_cache
 from pathlib import Path
 
@@ -54,6 +54,49 @@ def _cmap(font_path: str) -> frozenset[int]:
         return frozenset(font.getBestCmap() or {})
     finally:
         font.close()
+
+
+def write_labels(folder: Path, rows: Iterable[tuple[str, str]]) -> Path:
+    """Write ``folder/labels.csv`` in the exact form the trainer parses.
+
+    The vendored trainer does **not** read this file as CSV. It reads it
+    with ``pd.read_csv(..., sep='^([^,]+),', engine='python')``, a regular
+    expression that splits each line at its *first* comma and takes
+    everything after it, verbatim, as the label. A label may therefore
+    contain commas freely -- but it must not be quoted, and this is why
+    the file cannot be written with :mod:`csv`.
+
+    ``csv.writer`` quotes any field containing the delimiter, and those
+    quotation marks are not stripped by a regex split: they become part of
+    the label. v1 was trained this way, and **36,918 of its 175,500 crops
+    -- 21% -- carry labels wrapped in quotation marks they do not show**,
+    with a crop of a single comma labelled ``","``. The model learnt
+    exactly what it was shown: inventing a quotation mark is the single
+    commonest thing it does wrong on the evaluation pages, ahead of every
+    genuine character confusion. Found while harvesting real crops, in
+    time for v2's charset re-render but not for v1.
+
+    Args:
+        folder: The dataset folder; created if missing.
+        rows: ``(filename, label)`` pairs.
+
+    Returns:
+        The path written.
+
+    Raises:
+        ValueError: A label contains a newline, which no regex split on a
+            single line could ever recover.
+    """
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    destination = folder / "labels.csv"
+    with destination.open("w", encoding="utf-8", newline="") as handle:
+        handle.write("filename,words\n")
+        for filename, label in rows:
+            if "\n" in label or "\r" in label:
+                raise ValueError(f"label for {filename!r} spans lines: {label!r}")
+            handle.write(f"{filename},{label}\n")
+    return destination
 
 
 def missing_glyphs(font_path: str, characters: str) -> frozenset[str]:
@@ -142,8 +185,5 @@ def write_dataset(
             render_word(word, font, jitter=jitter).save(folder / filename)
             rows.append((filename, word))
 
-    with (folder / "labels.csv").open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle)
-        writer.writerow(["filename", "words"])
-        writer.writerows(rows)
+    write_labels(folder, rows)
     return folder

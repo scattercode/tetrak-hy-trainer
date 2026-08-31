@@ -25,6 +25,54 @@ def test_stray_characters_are_rejected_not_filtered(tmp_path: Path) -> None:
         synth.write_dataset(tmp_path, "x", ["ok", "п-cyrillic"], font_path=FONT)
 
 
+class TestWriteLabels:
+    """The trainer reads labels.csv with a regex that splits each line at
+    its first comma, not as CSV -- so a label may contain commas but must
+    never be quoted. csv.writer quotes them, and the quotation marks then
+    become part of the label: 36,918 of v1's 175,500 crops were trained
+    with labels wrapped in quote marks the images do not show."""
+
+    def test_a_label_containing_a_comma_is_not_quoted(self, tmp_path: Path) -> None:
+        synth.write_labels(tmp_path, [("a.png", "Շվեյցարիայում,")])
+        assert (tmp_path / "labels.csv").read_text(encoding="utf-8").splitlines()[1] == (
+            "a.png,Շվեյցարիայում,"
+        )
+
+    def test_a_label_that_is_only_a_comma_survives(self, tmp_path: Path) -> None:
+        """v1 has crops of a single comma labelled '","'."""
+        synth.write_labels(tmp_path, [("a.png", ",")])
+        assert (tmp_path / "labels.csv").read_text(encoding="utf-8").splitlines()[1] == "a.png,,"
+
+    def test_the_label_is_everything_after_the_first_comma(self, tmp_path: Path) -> None:
+        """Mirrors the trainer's own split, so the round trip is pinned."""
+        rows = [("a.png", "simple"), ("b.png", "Ե․, 1956։"), ("c.png", "two words")]
+        synth.write_labels(tmp_path, rows)
+        lines = (tmp_path / "labels.csv").read_text(encoding="utf-8").splitlines()[1:]
+        assert [tuple(line.split(",", 1)) for line in lines] == rows
+
+    def test_the_header_the_trainer_reads_columns_by(self, tmp_path: Path) -> None:
+        synth.write_labels(tmp_path, [])
+        assert (tmp_path / "labels.csv").read_text(encoding="utf-8") == "filename,words\n"
+
+    def test_quotation_marks_in_a_label_are_left_alone(self, tmp_path: Path) -> None:
+        """A genuine quotation mark in the page must not be doubled or
+        stripped -- « » are ordinary characters in this charset."""
+        synth.write_labels(tmp_path, [("a.png", '«Ա» "b"')])
+        assert (tmp_path / "labels.csv").read_text(encoding="utf-8").splitlines()[1] == (
+            'a.png,«Ա» "b"'
+        )
+
+    def test_a_label_spanning_lines_is_refused(self, tmp_path: Path) -> None:
+        """No line-based split could recover it, so fail rather than
+        silently write a file the trainer will misread."""
+        with pytest.raises(ValueError, match="spans lines"):
+            synth.write_labels(tmp_path, [("a.png", "two\nlines")])
+
+    def test_the_folder_is_created(self, tmp_path: Path) -> None:
+        synth.write_labels(tmp_path / "new", [("a.png", "ա")])
+        assert (tmp_path / "new" / "labels.csv").exists()
+
+
 @needs_font
 class TestMissingGlyphs:
     """Mshtakan is a real, reproducible example: it has no glyph for the

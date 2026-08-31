@@ -31,7 +31,6 @@ Interrupted? The checkpoint survives; re-package with ``--package-only``.
 from __future__ import annotations
 
 import argparse
-import csv
 import os
 import random
 import shutil
@@ -153,10 +152,10 @@ def render_corpus(
                 train_rows.append((name, line))
 
     for directory, rows in ((train_dir, train_rows), (val_dir, val_rows)):
-        with (directory / "labels.csv").open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.writer(handle)
-            writer.writerow(["filename", "words"])
-            writer.writerows(rows)
+        # Not csv.writer: it quotes labels containing a comma, and the
+        # trainer's regex split keeps the quotation marks. See
+        # synth.write_labels -- this cost v1 21% of its crops.
+        synth.write_labels(directory, rows)
     return data_root, len(train_rows)
 
 
