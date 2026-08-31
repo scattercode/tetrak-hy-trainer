@@ -208,6 +208,12 @@ def main() -> int:
     parser.add_argument("--package-only", action="store_true")
     args = parser.parse_args()
 
+    # Resolved here, not at the point of use: training chdir()s into the run
+    # directory, so a relative --eval-dir would otherwise resolve against
+    # that and fail -- after the whole run, with the number lost.
+    if args.eval_dir is not None:
+        args.eval_dir = args.eval_dir.resolve()
+
     run_dir = (REPO / "runs" / args.run_name).resolve()
     run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -283,7 +289,7 @@ def main() -> int:
 
     bundle = package(run_dir, args.run_name)
     if args.eval_dir is not None:
-        evaluate_pages(bundle, args.eval_dir.resolve())
+        evaluate_pages(bundle, args.eval_dir)
     print(f"total wall time: {(time.time() - started) / 3600:.1f}h", flush=True)
     return 0
 

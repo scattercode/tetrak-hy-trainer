@@ -82,6 +82,14 @@ from datasets import load_dataset
 corpus = load_dataset("tetrak/armenian-ocr-crops", "corpus", revision="<tag or commit>")
 ```
 
+## Acknowledgements
+
+The Armenian Soviet Encyclopedia was
+[Daniel Ohanian's](https://mastodon.social/@dohanian) suggestion — when we
+asked on Mastodon for Armenian training material with trustworthy
+transcriptions, he pointed us at the proofread volumes on Armenian
+Wikisource. This dataset grew from that pointer. Thank you, Daniel.
+
 ## Related
 
 - [tetrak-hy-trainer](https://github.com/scattercode/tetrak-hy-trainer)

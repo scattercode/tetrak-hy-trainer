@@ -158,6 +158,11 @@ def main() -> int:
         action="store_true",
         help="flip an already-reviewed repository to public and exit",
     )
+    parser.add_argument(
+        "--card-only",
+        action="store_true",
+        help="re-push scripts/dataset_card.md to the existing repository and exit",
+    )
     args = parser.parse_args()
 
     from huggingface_hub import HfApi
@@ -175,6 +180,11 @@ def main() -> int:
     if args.make_public:
         api.update_repo_settings(args.repo_id, repo_type="dataset", private=False)
         print(f"{args.repo_id} is now public.")
+        return 0
+
+    if args.card_only:
+        push_card(args.repo_id)
+        print(f"Card updated: https://huggingface.co/datasets/{args.repo_id}")
         return 0
 
     builds = {}
