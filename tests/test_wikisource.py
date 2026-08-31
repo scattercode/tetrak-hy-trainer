@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from tetrak_hy_trainer import wikisource
 from tetrak_hy_trainer.wikisource import PageRecord, WikisourceClient, clean_wikitext
 
@@ -58,21 +60,34 @@ class TestCleanWikitext:
 
 
 class FakeSession:
-    """Replays canned JSON responses in order; records what was requested."""
+    """Replays canned JSON responses in order; records what was requested.
+
+    A request with no query parameters is a raw file download (the image
+    fetch, which does not go through the API), so it is served from
+    :attr:`image_bytes` rather than consuming a queued JSON payload --
+    otherwise every image would eat the response meant for the next API
+    call.
+    """
 
     def __init__(self, payloads: list[dict]):
         self.payloads = list(payloads)
         self.requests: list[dict] = []
         self.headers: dict = {}
+        self.image_bytes = b""
+        self.downloaded: list[str] = []
 
     def get(self, url, params=None, timeout=None):
-        self.requests.append(params or {})
+        if params is None:
+            self.downloaded.append(url)
+            return FakeResponse(content=self.image_bytes)
+        self.requests.append(params)
         return FakeResponse(self.payloads.pop(0))
 
 
 class FakeResponse:
-    def __init__(self, payload: dict):
+    def __init__(self, payload: dict | None = None, content: bytes = b""):
         self.payload = payload
+        self.content = content
 
     def raise_for_status(self) -> None:
         pass
@@ -144,6 +159,35 @@ class TestTitleMapping:
             wikisource.index_to_file_title("Էջ:Vol 1.djvu/5")
 
 
+class TestParsePageSpec:
+    def test_a_range(self) -> None:
+        from tetrak_hy_trainer.harvest import parse_page_spec
+
+        assert parse_page_spec("20-24") == {20, 21, 22, 23, 24}
+
+    def test_single_pages_and_ranges_together(self) -> None:
+        from tetrak_hy_trainer.harvest import parse_page_spec
+
+        assert parse_page_spec("5,20-22,99") == {5, 20, 21, 22, 99}
+
+    def test_whitespace_and_empty_parts_are_tolerated(self) -> None:
+        from tetrak_hy_trainer.harvest import parse_page_spec
+
+        assert parse_page_spec(" 5 , 7 ,") == {5, 7}
+
+    def test_a_backwards_range_is_rejected(self) -> None:
+        from tetrak_hy_trainer.harvest import parse_page_spec
+
+        with pytest.raises(ValueError, match="backwards"):
+            parse_page_spec("80-20")
+
+    def test_an_empty_spec_is_rejected(self) -> None:
+        from tetrak_hy_trainer.harvest import parse_page_spec
+
+        with pytest.raises(ValueError):
+            parse_page_spec(",")
+
+
 class TestHarvest:
     def test_writes_text_and_manifest_with_provenance(self, tmp_path) -> None:
         from tetrak_hy_trainer.harvest import harvest
@@ -206,4 +250,68 @@ class TestHarvest:
 
         assert len(manifest) == 1
         assert manifest[0]["revid"] is None  # kept, not refetched
+        assert (tmp_path / "text" / "5.txt").read_text(encoding="utf-8") == "արդեն կա"
+
+    def test_a_limited_run_keeps_pages_it_did_not_visit(self, tmp_path) -> None:
+        """The manifest is provenance -- which revision of which transcript
+        trained a published model. Writing only the visited pages would have
+        cut volume 1's 717-page record down to the --limit."""
+        from tetrak_hy_trainer.harvest import harvest
+
+        (tmp_path / "text").mkdir()
+        (tmp_path / "text" / "5.txt").write_text("արդեն կա", encoding="utf-8")
+        (tmp_path / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "index": "Ինդեքս:Vol.djvu",
+                    "min_quality": 3,
+                    "pages": [
+                        {"page_number": 5, "text": "text/5.txt", "revid": 111},
+                        {"page_number": 900, "text": "text/900.txt", "revid": 222},
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        session = FakeSession(
+            [
+                _pages_payload(
+                    {"1": {"pageid": 10, "title": "Էջ:Vol.djvu/5", "proofread": {"quality": 4}}}
+                )
+            ]
+        )
+        harvest(WikisourceClient(session=session, pause=0), "Ինդեքս:Vol.djvu", tmp_path, limit=1)
+
+        saved = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+        assert [entry["page_number"] for entry in saved["pages"]] == [5, 900]
+        assert saved["pages"][1]["revid"] == 222  # untouched page kept its provenance
+
+    def test_images_top_up_a_text_only_harvest(self, tmp_path) -> None:
+        """v0's and v1's volumes were harvested text-only, and real-crop
+        harvesting needs their scans. While the image fetch sat inside the
+        "new page" branch, re-running with --images over them downloaded
+        nothing and reported success."""
+        from tetrak_hy_trainer.harvest import harvest
+
+        (tmp_path / "text").mkdir()
+        (tmp_path / "text" / "5.txt").write_text("արդեն կա", encoding="utf-8")
+
+        session = FakeSession(
+            [
+                _pages_payload(
+                    {"1": {"pageid": 10, "title": "Էջ:Vol.djvu/5", "proofread": {"quality": 4}}}
+                ),
+                # The imageinfo lookup; no wikitext payload, so refetching
+                # the existing text would still exhaust the fake and raise.
+                {"query": {"pages": {"20": {"imageinfo": [{"thumburl": "https://x/5.jpg"}]}}}},
+            ]
+        )
+        session.image_bytes = b"\xff\xd8jpeg"
+        client = WikisourceClient(session=session, pause=0)
+
+        manifest = harvest(client, "Ինդեքս:Vol.djvu", tmp_path, images=True)
+
+        assert (tmp_path / "images" / "5.jpg").read_bytes() == b"\xff\xd8jpeg"
+        assert manifest[0]["image"] == "images/5.jpg"
         assert (tmp_path / "text" / "5.txt").read_text(encoding="utf-8") == "արդեն կա"
