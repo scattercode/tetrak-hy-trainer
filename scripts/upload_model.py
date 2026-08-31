@@ -29,14 +29,20 @@ head's output size must equal ``len(character_list) + 1`` (the blank),
 so a charset/weights mismatch fails here rather than in the field.
 
 The repository is created **private**; review it on the Hub, then flip
-it public (``--make-public``). The upload is tagged (default ``v0``)
-so downstream code can pin ``revision=``.
+it public (``--make-public``). The upload is tagged with
+``--version-tag`` so downstream code can pin ``revision=``.
+
+Each version's recipe and scores live in the ``VERSIONS`` table below,
+and a tag with no entry there is refused rather than published with
+empty provenance.
 
 Requires a Hugging Face login with write access to the ``tetrak`` org
 (``hf auth login``). Run from the repo root:
 
-    uv run scripts/upload_model.py --dry-run   # validate + convert only
-    uv run scripts/upload_model.py             # validate + push (private)
+    uv run scripts/upload_model.py --bundle-dir runs/v1/bundle \
+        --version-tag v1 --dry-run   # validate + convert only
+    uv run scripts/upload_model.py --bundle-dir runs/v1/bundle \
+        --version-tag v1             # validate + push (private)
 """
 
 from __future__ import annotations
@@ -57,9 +63,94 @@ ROOT = Path(__file__).resolve().parent.parent
 CARD = Path(__file__).resolve().parent / "model_card.md"
 BUNDLE_FILES = ("tetrak_hy.pth", "tetrak_hy.py", "tetrak_hy.yaml")
 
-# v0's recorded recipe and synthetic-validation result (runs/v0/train.log).
-V0_RECIPE = "scripts/train_synthetic.py --line-tokens-max 1 --no-augment --min-size 36"
-V0_SYNTHETIC_VAL = {"word_accuracy": 99.722, "norm_edit_distance": 0.9983}
+# Both released versions are scored on the same real pages, so the wording is
+# shared rather than repeated per version.
+REAL_EVAL_SOURCE = (
+    "Armenian Soviet Encyclopedia vol. 2, pages 105-114 from Armenian "
+    "Wikisource, proofread to quality level 4 (runs/eval/ase-vol2)"
+)
+REAL_EVAL_METRIC = "tetrak_ocr.accuracy; higher is better for both figures"
+
+# Every face the renderer actually used, from the `fonts:` line both runs
+# logged. Mshtakan ships with macOS; no font file is redistributed.
+FONTS = ["NotoSansArmenian.ttf", "NotoSerifArmenian.ttf", "Mshtakan.ttc"]
+
+# What each released version was trained on and what it scored, kept per
+# version rather than as generic strings: a release whose numbers are not
+# written down here is a release nobody can check. An unknown tag is refused
+# rather than recorded as nulls -- see facts_for().
+VERSIONS = {
+    "v0": {
+        # runs/v0/train.log
+        "recipe": "scripts/train_synthetic.py --line-tokens-max 1 --no-augment --min-size 36",
+        "dataset_config": "crops",
+        "synthetic_validation": {
+            "word_accuracy": 99.722,
+            "norm_edit_distance": 0.9983,
+            "note": (
+                "the v0 validation crops are undegraded, so this figure says "
+                "almost nothing about real scans"
+            ),
+        },
+        "real_scan_evaluation": {
+            "char_similarity": 0.0745,
+            "word_recall": 0.2742,
+            "pages": 10,
+            "source": REAL_EVAL_SOURCE,
+            "metric": REAL_EVAL_METRIC,
+        },
+    },
+    "v1": {
+        # runs/v1/train.log; the recipe is train_synthetic.py's defaults --
+        # line samples of 1-4 consecutive tokens, sizes down to 18px,
+        # degradations on both splits, imgW 800, batch_max_length 60.
+        "recipe": "scripts/train_synthetic.py (defaults; 150,000 iterations)",
+        "dataset_config": "crops-v1",
+        "synthetic_validation": {
+            "word_accuracy": 98.8,
+            "norm_edit_distance": 0.9974,
+            "note": (
+                "the v1 validation crops are degraded like the training ones, "
+                "so unlike v0 this figure is measured on realistic input"
+            ),
+        },
+        "real_scan_evaluation": {
+            "char_similarity": 0.1004,
+            "word_recall": 0.5014,
+            "pages": 10,
+            "source": REAL_EVAL_SOURCE,
+            "metric": REAL_EVAL_METRIC,
+            "baselines": {
+                "tesseract-hye": {"char_similarity": 0.6968, "word_recall": 0.6621},
+                "tesseract-hye-auto": {"char_similarity": 0.1281, "word_recall": 0.6637},
+                "marker": {"char_similarity": 0.2580, "word_recall": 0.7660},
+                "tetrak-hy-v0": {"char_similarity": 0.0745, "word_recall": 0.2742},
+                "easyocr-stock": {"char_similarity": 0.0348, "word_recall": 0.0314},
+            },
+            "note": (
+                "char_similarity here is dominated by reading order on these "
+                "two-column pages rather than by recognition: tesseract-hye-auto "
+                "reads words as well as tesseract-hye (0.664 vs 0.662 word "
+                "recall) yet scores 0.128 char_similarity, close to v1's, "
+                "because the evaluation joins detected lines with a newline in "
+                "detector order. v1's genuine recognition gap against "
+                "tesseract-hye is word recall 0.50 vs 0.66."
+            ),
+        },
+    },
+}
+
+
+def facts_for(version: str) -> dict:
+    """The recorded facts for *version*, or a refusal to invent them."""
+    try:
+        return VERSIONS[version]
+    except KeyError:
+        raise SystemExit(
+            f"No recorded facts for {version!r}. Add an entry to VERSIONS in "
+            f"{Path(__file__).name} -- recipe, dataset config, synthetic "
+            "validation and real-scan evaluation -- before publishing it."
+        ) from None
 
 
 def sha256(path: Path) -> str:
@@ -106,15 +197,20 @@ def provenance(bundle: Path, version: str, dataset_revision: str | None) -> dict
     commit = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=False
     ).stdout.strip()
+    facts = facts_for(version)
     return {
         "model": "tetrak_hy",
         "version": version,
         "architecture": "EasyOCR generation2 (VGG + 2x BiLSTM + CTC)",
-        "recipe": V0_RECIPE if version == "v0" else "see the run directory's config",
-        "fonts": ["NotoSansArmenian.ttf", "NotoSerifArmenian.ttf"],
-        "synthetic_validation": V0_SYNTHETIC_VAL if version == "v0" else None,
-        "real_scan_evaluation": None,
-        "dataset": {"repo": DATASET_ID, "config": "crops", "revision": dataset_revision},
+        "recipe": facts["recipe"],
+        "fonts": FONTS,
+        "synthetic_validation": facts["synthetic_validation"],
+        "real_scan_evaluation": facts["real_scan_evaluation"],
+        "dataset": {
+            "repo": DATASET_ID,
+            "config": facts["dataset_config"],
+            "revision": dataset_revision,
+        },
         "trainer_commit_at_upload": commit or None,
         "sha256": {name: sha256(bundle / name) for name in BUNDLE_FILES},
     }
