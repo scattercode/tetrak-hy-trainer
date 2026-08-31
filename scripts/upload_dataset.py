@@ -10,7 +10,7 @@
 """Package the training data and upload it to the Hugging Face Hub.
 
 Builds the ``tetrak/armenian-ocr-crops`` dataset from what lives under
-``runs/`` and pushes it as two configurations:
+``runs/`` and pushes it as three configurations:
 
 - ``corpus`` — the harvested, proofread Armenian Soviet Encyclopedia
   pages (``runs/v0/harvest`` plus every ``runs/v1/harvest-vol*``), one
@@ -20,6 +20,10 @@ Builds the ``tetrak/armenian-ocr-crops`` dataset from what lives under
   (``runs/v0/all_data``), ``train`` and ``validation`` splits of
   ``image`` + ``text`` rows, images embedded in Parquet shards so the
   Hub's dataset viewer works.
+- ``crops-v1`` — the v1 synthetic training set
+  (``runs/v1/all_data``), the same columns and splits, line-shaped
+  crops of 1-4 consecutive tokens with degradations applied to both
+  splits. This is the set that trained the published v1 weights.
 
 The repository is created **private**; review the card and viewer on
 the Hub, then flip it public from the repo's settings page (or rerun
@@ -33,8 +37,9 @@ Requires a Hugging Face login with write access to the ``tetrak`` org
     uv run scripts/upload_dataset.py --dry-run   # build + summarise only
     uv run scripts/upload_dataset.py             # build + push (private)
 
-The crops push moves ~700 MB of embedded images; expect it to take a
-while on a domestic uplink.
+The crop pushes move a lot of embedded images -- ~700 MB for ``crops``
+and ~1.2 GB for ``crops-v1`` -- so expect them to take a while on a
+domestic uplink. Use ``--only`` to push one configuration at a time.
 """
 
 from __future__ import annotations
@@ -51,6 +56,15 @@ ROOT = Path(__file__).resolve().parent.parent
 CARD = Path(__file__).resolve().parent / "dataset_card.md"
 
 _VOLUME = re.compile(r"(\d+)\.djvu$")
+
+# Crop configuration -> its (train, validation) split directories under runs/.
+# The mapping is explicit because the two sets are different data, not two
+# renders of one recipe: `crops` is v0's single-word crops, `crops-v1` the
+# line-shaped ones that trained v1.
+CROP_CONFIGS = {
+    "crops": ("v0/all_data/v0_train", "v0/all_data/v0_val"),
+    "crops-v1": ("v1/all_data/syn_train", "v1/all_data/syn_val"),
+}
 
 
 def corpus_rows(runs: Path) -> list[dict]:
@@ -113,15 +127,15 @@ def build_corpus(runs: Path):
     return DatasetDict({"train": Dataset.from_list(corpus_rows(runs), features=features)})
 
 
-def build_crops(runs: Path):
+def build_crops(runs: Path, config: str):
     from datasets import Dataset, DatasetDict, Features, Image, Value
 
     features = Features({"image": Image(), "text": Value("string")})
-    all_data = runs / "v0" / "all_data"
+    train, validation = CROP_CONFIGS[config]
     return DatasetDict(
         {
-            "train": Dataset.from_list(crop_rows(all_data / "v0_train"), features=features),
-            "validation": Dataset.from_list(crop_rows(all_data / "v0_val"), features=features),
+            "train": Dataset.from_list(crop_rows(runs / train), features=features),
+            "validation": Dataset.from_list(crop_rows(runs / validation), features=features),
         }
     )
 
@@ -145,8 +159,8 @@ def main() -> int:
     parser.add_argument("--runs-dir", type=Path, default=ROOT / "runs")
     parser.add_argument(
         "--only",
-        choices=["corpus", "crops"],
-        help="push a single configuration (default: both, corpus first)",
+        choices=["corpus", *CROP_CONFIGS],
+        help="push a single configuration (default: all of them, corpus first)",
     )
     parser.add_argument(
         "--dry-run",
@@ -190,8 +204,9 @@ def main() -> int:
     builds = {}
     if args.only in (None, "corpus"):
         builds["corpus"] = build_corpus(args.runs_dir)
-    if args.only in (None, "crops"):
-        builds["crops"] = build_crops(args.runs_dir)
+    for config in CROP_CONFIGS:
+        if args.only in (None, config):
+            builds[config] = build_crops(args.runs_dir, config)
 
     for name, dataset_dict in builds.items():
         counts = ", ".join(f"{split}: {len(ds):,}" for split, ds in dataset_dict.items())
