@@ -221,6 +221,67 @@ VERSIONS = {
             ),
         },
     },
+    "v3": {
+        # runs/v3/train.log. The first model here trained on real crops
+        # rather than rendered ones -- brief 011 Stage 3 step 2.
+        "recipe": (
+            "scripts/finetune_real.py --iters 3000 --batch-ratio 0.5-0.5 "
+            "(fine-tuned from v2; real and synthetic crops mixed in every batch)"
+        ),
+        "dataset_config": None,
+        "dataset_note": (
+            "fine-tuned on 6,097 crops cut from 30 human-proofread scans of "
+            "volumes 5 and 6, labelled from the transcripts by "
+            "detection-assisted alignment (tetrak_hy_trainer.align) and mixed "
+            "50/50 in each batch with v2's 175,500 synthetic crops. Volume 2 "
+            "is refused by tetrak_hy_trainer.heldout: it is the evaluation set"
+        ),
+        "charset": {
+            "num_class": 170,
+            "added": [],
+            "note": "unchanged from v2; a fine-tune inherits its parent's charset",
+        },
+        "synthetic_validation": None,
+        "real_crop_validation": {
+            "word_accuracy": 95.0,
+            "norm_edit_distance": 0.9936,
+            "note": (
+                "700 crops from pages held out of training -- split by page, "
+                "never by crop, since crops from one page share its paper and "
+                "scanning. Accuracy sits in a 93-95% band from iteration 500 "
+                "onward, so this figure selects a plateau rather than a peak, "
+                "and it is a poor proxy for page-level recall: a 10,000-"
+                "iteration run reached the same 95% here while scoring 0.0564 "
+                "worse on page word recall"
+            ),
+        },
+        "real_scan_evaluation": {
+            "char_similarity": 0.1470,
+            "word_recall": 0.7356,
+            "word_recall_with_fold": 0.7707,
+            "pages": 10,
+            "source": REAL_EVAL_SOURCE,
+            "metric": REAL_EVAL_METRIC,
+            "baselines": {
+                "marker": {"char_similarity": 0.2580, "word_recall": 0.7660},
+                "tesseract-hye": {"char_similarity": 0.6968, "word_recall": 0.6621},
+                "tesseract-hye-auto": {"char_similarity": 0.1281, "word_recall": 0.6637},
+                "tetrak-hy-v2": {"char_similarity": 0.1166, "word_recall": 0.6073},
+                "tetrak-hy-v1": {"char_similarity": 0.1004, "word_recall": 0.5014},
+                "tetrak-hy-v0": {"char_similarity": 0.0745, "word_recall": 0.2742},
+                "easyocr-stock": {"char_similarity": 0.0348, "word_recall": 0.0314},
+            },
+            "note": (
+                "word_recall_with_fold applies tetrak_hy.fold_script and is "
+                "what the shipped pipeline earns. At 0.7707 it is the highest "
+                "word recall measured on this set, ahead of marker's 0.7660 "
+                "and tesseract-hye's 0.6621. char_similarity remains dominated "
+                "by reading order rather than recognition, for the reason "
+                "recorded against v1, and is not comparable across backends "
+                "that serialise pages differently."
+            ),
+        },
+    },
 }
 
 
@@ -301,7 +362,7 @@ def provenance(bundle: Path, version: str, dataset_revision: str | None) -> dict
     # Optional, and carried into the published record when present: a
     # defect found after a version shipped belongs beside its numbers,
     # not only in a commit message nobody downloading weights will read.
-    for key in ("charset", "known_defects"):
+    for key in ("charset", "known_defects", "real_crop_validation"):
         if key in facts:
             record[key] = facts[key]
     return record

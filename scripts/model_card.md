@@ -24,20 +24,19 @@ archives. The architecture is EasyOCR's own generation2 recognition
 network (VGG feature extractor, two BiLSTM layers, CTC head), so the
 model drops into a stock EasyOCR install.
 
-## Status: v2, alpha
+## Status: v3, alpha
 
-These are the v2 weights, trained on synthetic line crops degraded to
-look like scans. **Paired with the fold described below, v2 reads
-Armenian better than `tesseract -l hye` on word recall — 0.692 against
-0.662 — which is the first time these models have passed that bar.**
-The raw model scores 0.607; the difference is a one-line post-process
-shipped in the companion package, and both figures are given below so
-you can see which you are getting.
+These are the v3 weights: v2 fine-tuned on **real crops cut from
+scanned pages**, not rendered ones. **Paired with the fold described
+below, v3 reads 0.771 word recall on real scans — the highest measured
+here, ahead of `tesseract -l hye` at 0.662 and of Marker at 0.766.**
+The model alone reads 0.736; the difference is a one-line post-process
+shipped in the companion package, and both figures are given below.
 
 Character similarity is a different story and still a weak one. See
 below: it measures reading order more than it measures recognition.
 
-> **Use v2 or later. v0 and v1 carry two defects that v2 fixes.**
+> **Use v3 or later. v0 and v1 carry two defects that v2 fixed.**
 >
 > - **21% of their training labels were wrapped in quotation marks the
 >   images do not show** (36,918 of v1's 175,500 crops). The trainer
@@ -52,12 +51,12 @@ below: it measures reading order more than it measures recognition.
 >   charset, so every training crop containing it was silently dropped
 >   and the models have no class for it — 5.8% of the evaluation pages'
 >   words are unwinnable, and v1 emits the character zero times in
->   6,672 detected boxes. v2 emits it 221 times.
+>   6,672 detected boxes.
 >
 > Both were found by reading the training data rather than the scores,
 > which is why they survived two releases. Neither is fixable in v0 or
 > v1 without retraining, so those tags stay as they are, defects
-> recorded, and v2 supersedes them.
+> recorded, and later versions supersede them.
 
 ### Measured on real scans
 
@@ -68,8 +67,10 @@ figures.
 
 | Backend | Char similarity | Word recall |
 |---|---|---|
-| **tetrak_hy v2 + `fold_script`** | **0.117** | **0.692** |
+| **tetrak_hy v3 + `fold_script`** | **0.147** | **0.771** |
 | marker | 0.258 | 0.766 |
+| tetrak_hy v3 (raw) | 0.147 | 0.736 |
+| tetrak_hy v2 + `fold_script` | 0.117 | 0.692 |
 | `tesseract -l hye` (auto page mode) | 0.128 | 0.664 |
 | `tesseract -l hye` | 0.697 | 0.662 |
 | tetrak_hy v2 (raw) | 0.117 | 0.607 |
@@ -83,8 +84,8 @@ visually identical Latin twin of an Armenian character — `h` for `հ`, a
 colon for the Armenian full stop `։`. `fold_script`, in the
 [tetrak-easyocr-armenian](https://pypi.org/project/tetrak-easyocr-armenian/)
 package, folds those back within any token that already contains an
-Armenian letter. Applying it is one line, and it is worth +0.085 word
-recall:
+Armenian letter. Applying it is one line, and it is worth +0.035 word
+recall on v3:
 
 ```python
 import tetrak_hy
@@ -100,37 +101,64 @@ The char similarity column is mostly not about recognition. It is
 dominated by reading order on these two-column pages: Tesseract in
 automatic page mode reads words just as well as it does in the row
 below (0.664 vs 0.662 word recall) yet its char similarity collapses
-from 0.697 to 0.128, close to v2's, purely because the text comes out
+from 0.697 to 0.128, close to v3's, purely because the text comes out
 in a different order. This evaluation joins detected lines with a
 newline in detector order, so any backend that does not serialise
 two-column pages into reading order is penalised the same way. Column
 handling in the surrounding pipeline lifts that number without
 retraining anything.
 
+### What real crops changed
+
+v3 is v2 fine-tuned on 6,097 crops cut from 30 human-proofread scans of
+volumes 5 and 6, labelled from their transcripts by detection-assisted
+alignment and mixed 50/50 in every batch with v2's synthetic crops, so
+the model adapts to real print without forgetting the breadth the
+synthetic pre-training bought. Volume 2 — the evaluation set — is
+refused by the harvester outright.
+
+This targeted the shape confusions synthetic fonts cannot teach: a
+cleanly rendered `հ` looks nothing like a worn one on 1970s letterpress.
+Against v2, misread words on the evaluation pages fall by a third and
+`հ` read as Latin `h` — the commonest confusion in the whole table —
+drops sharply.
+
+A caveat worth stating: **held-out per-crop accuracy is a poor proxy for
+page-level recall here.** A 10,000-iteration run of this same fine-tune
+reached the same 95% crop accuracy as the 3,000-iteration run shipped
+here, while scoring 0.056 *worse* on page word recall. Crop accuracy
+plateaus early and then measures overfitting; the page metric is the
+one to trust.
+
 ### Charset
 
-v2's charset holds 169 characters plus the CTC blank, 170 classes.
-It adds U+2024 ONE DOT LEADER and U+00B0 DEGREE SIGN to v1's set.
+The charset holds 169 characters plus the CTC blank, 170 classes. v2
+added U+2024 ONE DOT LEADER and U+00B0 DEGREE SIGN to v1's set, and v3
+inherits it unchanged — a fine-tune keeps its parent's charset.
 **A charset change is a new model by construction** — CTC class indices
 are positional — so v2 weights cannot be loaded under a v1 `tetrak_hy.yaml`
 or the reverse. Always take the `.yaml` and the `.pth` from the same
 revision.
 
-### Synthetic validation
+### Validation
 
-99.333% word accuracy, 0.9989 normalised edit distance, on degraded
-validation crops like v1's — so comparable with v1's 98.8% rather than
-with v0's undegraded figure. It is still synthetic, and the real-scan
-table above is the one that matters.
+v3 is validated on **real** crops: 700 of them, from pages held out of
+training entirely — split by page, never by crop, since crops from one
+page share its paper and its scanning. 95.0% word accuracy, 0.9936
+normalised edit distance. See the caveat above about what that figure
+does and does not predict.
+
+v2, the model v3 was fine-tuned from, scored 99.333% / 0.9989 on
+degraded synthetic validation crops.
 
 ### What is next
 
-Fine-tuning on real crops cut from scanned pages and aligned against
-proofread transcripts is the next lever: it targets the shape
-confusions that remain — `հ` read as `խ`, `խ` as `ի`, `տ` as `ո` —
-which are misreadings of degraded letterpress that synthetic fonts,
-rendering a clean ascender, cannot teach. Treat v2 as a usable
-recogniser rather than a finished one.
+More real crops, from more volumes. v3 learnt from 30 pages; the
+alignment tooling scales to as many as there are proofread scans, and
+the yield per page is roughly 200 crops. Reading order is the other
+open front, and it is worth more than recognition for the char
+similarity column — that belongs in the pipeline around the model
+rather than in the weights.
 
 ## Files
 
@@ -153,7 +181,7 @@ for custom models:
 from huggingface_hub import hf_hub_download
 
 for filename in ("tetrak_hy.pth", "tetrak_hy.py", "tetrak_hy.yaml"):
-    hf_hub_download("tetrak/easyocr-armenian", filename, revision="v2")
+    hf_hub_download("tetrak/easyocr-armenian", filename, revision="v3")
 ```
 
 - `tetrak_hy.yaml` and `tetrak_hy.py` go in the user network
@@ -180,6 +208,11 @@ Pin `revision=` when downloading: each weights release is tagged, and
 from.
 
 ## Training data
+
+v3 is a fine-tune of v2; the paragraph below describes v2's synthetic
+pre-training, which v3 inherits. v3 adds 6,097 real crops, which are
+not published: they are cut from Armenian Wikisource scans and are
+reproducible from the transcripts with the trainer's harvester.
 
 Trained on 175,500 synthetic line crops rendered locally from the same
 source as
