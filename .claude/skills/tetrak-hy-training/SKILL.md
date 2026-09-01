@@ -21,7 +21,8 @@ one is the usual first five minutes lost.
 | `evaluate_baselines.py` | **Tetrak's venv, from Tetrak's repo root** | imports `tetrak_ocr` backends, and the Claude backend needs Tetrak's `.env` |
 | everything else (`charset_diff`, `wikisource_census`, `fetch_fonts`, `score_fold`, `confusion_report`) | this repo's plain `.venv` | standard library plus the core deps |
 
-The pre-push hook runs pytest and needs `.venv` on PATH.
+The pre-push hook runs the suite through `.venv/bin/python` when that exists,
+so it no longer needs `.venv` on PATH by hand.
 
 ## The `runs/` layout the defaults expect
 

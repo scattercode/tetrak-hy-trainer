@@ -22,7 +22,12 @@ pre-commit:
 pre-push:
   commands:
     tests:
-      run: pytest
+      # The project's own interpreter, not whichever `pytest` is on PATH.
+      # A bare `pytest` outside an activated venv cannot import the package,
+      # so every push failed at collection with ModuleNotFoundError and the
+      # standing advice was to put .venv/bin on PATH by hand. Fixed here
+      # instead, so the advice is no longer needed.
+      run: if [ -x .venv/bin/python ]; then .venv/bin/python -m pytest; else pytest; fi
 
 commit-msg:
   commands:

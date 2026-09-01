@@ -143,7 +143,8 @@ ruff format src tests scripts
 uv lock --check        # the lockfile matches pyproject.toml
 ```
 
-The pre-push hook runs pytest and needs `.venv` on PATH.
+The pre-push hook runs the suite through `.venv/bin/python` when that exists,
+so it no longer needs `.venv` on PATH by hand.
 
 ### Which interpreter runs which script
 
