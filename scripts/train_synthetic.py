@@ -49,6 +49,7 @@ from tetrak_hy_trainer import (  # noqa: E402
     packaging,
     synth,
     train_config,
+    wikisource,  # noqa: E402
 )
 
 
@@ -73,7 +74,12 @@ def clean_token_runs(harvest_dirs: list[Path]) -> list[list[str]]:
             if index_title and heldout.page_is_held_out(index_title, int(text_file.stem)):
                 continue
             current: list[str] = []
-            for token in text_file.read_text(encoding="utf-8").split():
+            # Normalised at read time, not only in clean_wikitext: several
+            # thousand pages were harvested before the substitutions were
+            # found, and re-fetching them to fix a character swap would be
+            # discourteous. Idempotent, so new harvests are unaffected.
+            page_text = wikisource.normalise_transcript(text_file.read_text(encoding="utf-8"))
+            for token in page_text.split():
                 if 1 <= len(token) <= 24 and set(token) <= allowed:
                     current.append(token)
                 elif current:

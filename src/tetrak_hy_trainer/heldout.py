@@ -55,7 +55,24 @@ EVALUATION_PAGES = range(105, 115)
 #: and fixed here before anything trained on these works. To evaluate on
 #: one of these slices, build its eval directory from exactly these
 #: pages; to widen one, do it before the next training run, never after.
-WORK_PAGES: dict[str, frozenset[int]] = {}
+WORK_PAGES: dict[str, frozenset[int]] = {
+    # Eastern Armenian, reformed orthography -- a second register-mate for
+    # the ASE in a different face and a scholarly (rather than
+    # encyclopedic) genre.
+    "Faustus of Byzantium": frozenset({22, 27, 36, 49, 57, 319, 322, 332, 339, 347}),
+    # Mixed Armenian-Latin, two columns: the only source that exercises
+    # the fold's per-token guard on real bilingual lines.
+    "practical dictionary Armenian English": frozenset({19, 21, 25, 417, 480}),
+    # Western Armenian.
+    "Vahan Totovents": frozenset({4, 9, 31, 50, 63, 110, 123, 197, 311, 520}),
+    "Yervand Otyan": frozenset({6, 18, 21, 51, 198, 229, 241, 275, 313, 713}),
+    "Hagop Baronian": frozenset({293, 294, 295, 517, 560, 623, 685, 689, 690, 749}),
+    # Eastern Armenian literary, and the source with the heaviest Russian
+    # apparatus -- a fair test of how the model handles mixed pages.
+    "Թումանյանի ԵԼԺ": frozenset({610, 620, 645, 685, 687, 689, 709, 744, 746, 776}),
+    # A second encyclopedia register, different publisher and face.
+    "Popular medical encyclopedia": frozenset({413, 470, 512, 514, 749, 766, 771, 773, 775, 776}),
+}
 
 # The Wikisource index titles carry the volume as a trailing "<n>.djvu", as in
 # "Ինդեքս:Հայկական Սովետական Հանրագիտարան (Soviet Armenian Encyclopedia) 2.djvu".

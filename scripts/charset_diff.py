@@ -23,7 +23,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
-from tetrak_hy_trainer import charset  # noqa: E402
+from tetrak_hy_trainer import charset, wikisource  # noqa: E402
 
 
 def main() -> int:
@@ -33,10 +33,18 @@ def main() -> int:
         text = "\n".join(
             f.read_text(encoding="utf-8") for f in sorted((directory / "text").glob("*.txt"))
         )
-        found = charset.strays(text)
-        total = sum(found.values())
-        print(f"\n{directory} — {len(found)} stray characters, {total} occurrences")
-        for character, count in found.most_common(25):
+        # Both numbers matter and they are different questions. The raw
+        # count is what the transcripts contain; the residual is what the
+        # samplers will actually meet, since they normalise transcriber
+        # substitutions at read time. Only the residual costs training
+        # data -- those tokens get dropped by the charset filter.
+        raw = charset.strays(text)
+        residual = charset.strays(wikisource.normalise_transcript(text))
+        print(
+            f"\n{directory} — {sum(residual.values())} strays after normalisation "
+            f"({sum(raw.values())} raw, {len(residual)} distinct)"
+        )
+        for character, count in residual.most_common(25):
             name = unicodedata.name(character, "?")
             print(f"  {count:>7}  U+{ord(character):04X}  {character!r}  {name}")
     return 0

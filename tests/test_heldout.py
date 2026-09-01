@@ -63,13 +63,13 @@ class TestWorkRegistry:
     """Brief 012's widening: per-work held-out pages for non-ASE sources."""
 
     def test_a_work_with_no_entry_has_no_held_out_pages(self) -> None:
-        assert heldout.held_out_pages("Ինդեքս:Faustus of Byzantium.djvu") is None
+        """Most of the 629 indexes are not harvested and reserve nothing."""
+        assert heldout.held_out_pages("Ինդեքս:Raffi, Collected works, vol. 2.djvu") is None
 
-    def test_registered_pages_are_held_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setitem(heldout.WORK_PAGES, "Faustus of Byzantium", frozenset({40, 41}))
+    def test_registered_pages_are_held_out(self) -> None:
         title = "Ինդեքս:Faustus of Byzantium, History of Armenia, 1968.djvu"
-        assert heldout.page_is_held_out(title, 40)
-        assert not heldout.page_is_held_out(title, 42)
+        assert heldout.page_is_held_out(title, 22)
+        assert not heldout.page_is_held_out(title, 23)
 
     def test_every_ase_vol2_page_is_held_out_without_an_entry(self) -> None:
         title = "Ինդեքս:Հայկական Սովետական Հանրագիտարան (Soviet Armenian Encyclopedia) 2.djvu"
@@ -87,3 +87,24 @@ class TestWorkRegistry:
                 f"(Soviet Armenian Encyclopedia) {volume}.djvu"
             )
             assert not heldout.page_is_held_out(title, 100)
+
+    def test_every_new_work_reserves_pages(self) -> None:
+        """Brief 012 stage 1: each harvested work contributes an
+        evaluation slice, fixed before anything trained on it."""
+        assert len(heldout.WORK_PAGES) == 7
+        assert all(len(pages) >= 5 for pages in heldout.WORK_PAGES.values())
+
+    def test_the_registry_reaches_the_real_index_titles(self) -> None:
+        """The keys are substrings of the titles the manifests carry, so a
+        typo would silently hold nothing out."""
+        titles = [
+            "Ինդեքս:Faustus of Byzantium, History of Armenia, 1968 (Փավստոս Բուզանդ).djvu",
+            "Ինդեքս:A practical dictionary Armenian English.djvu",
+            "Ինդեքս:Վահան Թոթովենց, Երկեր (Vahan Totovents, Works).djvu",
+            "Ինդեքս:Yervand Otyan, Collected works (Երվանդ Օտյան, Երկեր).djvu",
+            "Ինդեքս:Hagop Baronian, Collected works, vol. 10.djvu",
+            "Ինդեքս:Թումանյանի ԵԼԺ հ5.djvu",
+            "Ինդեքս:Հանրամատչելի բժշկական հանրագիտարան (Popular medical encyclopedia).djvu",
+        ]
+        for title in titles:
+            assert heldout.held_out_pages(title) is not None, title

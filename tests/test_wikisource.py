@@ -315,3 +315,41 @@ class TestHarvest:
         assert (tmp_path / "images" / "5.jpg").read_bytes() == b"\xff\xd8jpeg"
         assert manifest[0]["image"] == "images/5.jpg"
         assert (tmp_path / "text" / "5.txt").read_text(encoding="utf-8") == "արդեն կա"
+
+
+class TestNormaliseTranscript:
+    """Transcriber substitutions found by diffing the widened corpus.
+
+    Same class of habit as the ASCII colon standing in for the Armenian
+    full stop, which v3's fine-tune faithfully learnt from its labels.
+    """
+
+    def test_angle_brackets_become_guillemets(self) -> None:
+        assert wikisource.normalise_transcript("<Ազգ> և <Պահակ>") == "«Ազգ» և «Պահակ»"
+
+    def test_minus_sign_becomes_an_en_dash(self) -> None:
+        """U+2212 is a near-perfect homoglyph of the en dash, so it is
+        normalised rather than admitted to the charset."""
+        assert wikisource.normalise_transcript("acceleratio − արագացում") == (
+            "acceleratio – արագացում"
+        )
+
+    def test_horizontal_bar_becomes_an_em_dash(self) -> None:
+        assert wikisource.normalise_transcript("― Վա՜յ") == "— Վա՜յ"
+
+    def test_a_byte_order_mark_is_stripped(self) -> None:
+        assert wikisource.normalise_transcript("﻿մոտենում") == "մոտենում"
+
+    def test_it_is_idempotent(self) -> None:
+        """Applied by clean_wikitext and again at read time, so it must be."""
+        once = wikisource.normalise_transcript("<Ա> − բ")
+        assert wikisource.normalise_transcript(once) == once
+
+    def test_genuine_print_is_untouched(self) -> None:
+        """Ellipsis, brackets and the numero sign are printed, not
+        substituted -- they belong in the charset, not in this table."""
+        text = "…[13(15)․7․1852] № 6473 կմ²"
+        assert wikisource.normalise_transcript(text) == text
+
+    def test_clean_wikitext_applies_it(self) -> None:
+        assert "«Ազգ»" in wikisource.clean_wikitext("<Ազգ>")

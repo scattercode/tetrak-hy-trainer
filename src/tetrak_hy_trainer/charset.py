@@ -21,6 +21,14 @@ Composition
 - Western digits and basic Latin, because 19th–20th century Armenian print
   mixes in Latin names, numerals and abbreviations.
 - Common punctuation shared across scripts.
+- v3 additions (:data:`V3_ADDITIONS`): the ellipsis, square brackets,
+  the numero sign and superscript two — found by diffing the corpus
+  brief 012 widened to, and all genuinely printed. The same diff found
+  transcriber *substitutions* (angle brackets for guillemets, a minus
+  sign for a dash); those are normalised in
+  :func:`tetrak_hy_trainer.wikisource.normalise_transcript` rather than
+  admitted here, because a charset class for U+2212 would only give the
+  model a new homoglyph to confuse with the en dash.
 - v2 additions (:data:`V2_ADDITIONS`): U+2024 ONE DOT LEADER, the ASE
   transcripts' abbreviation dot (``Ա․``, ``Գրկ․``), and ``°``. v1's error
   analysis (``tetrak`` repo, ``product/research/
@@ -69,6 +77,18 @@ COMMON_PUNCTUATION = ".,:;!?'\"()-–—/%&+=*"
 # to keep the diff against v1's charset a pure append.
 V2_ADDITIONS = "․°"
 
+# v3 additions, from diffing the whole widened corpus against the charset
+# (brief 012 stage 1.3) -- every one genuinely printed, not a transcriber
+# substitution:
+#   …  2,930  the literary ellipsis, all through Tumanyan and Otyan
+#   [ ] 3,410  encyclopedia editorial brackets, as in a birth/death note
+#              "[13(15)․7․1852, Կ․ Պոլիս —1929, Փարիզ]"
+#   №    833  the Soviet-era numero sign, in citations and shelfmarks
+#   ²    263  superscript two, in areas and units ("30 կմ²")
+# Appended, like V2_ADDITIONS, so the diff against v2's charset stays a
+# pure append and the ordering tests keep their meaning.
+V3_ADDITIONS = "…[]№²"
+
 # Settled at spike time against what the EasyOCR trainer actually expects,
 # and baked into every released model since v0. Not a switch to flip: see
 # the module docstring.
@@ -97,6 +117,7 @@ def character_list(include_space: bool | None = None) -> str:
         + LATIN
         + COMMON_PUNCTUATION
         + V2_ADDITIONS
+        + V3_ADDITIONS
     )
     if include_space:
         characters += " "

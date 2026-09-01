@@ -60,11 +60,12 @@ def test_v2_additions_are_present() -> None:
     assert "°" in characters
 
 
-def test_v2_additions_are_appended_last() -> None:
-    """Appended after COMMON_PUNCTUATION so the v1 prefix (and the ``ա``
-    index test_order_is_stable pins) is untouched by the append itself."""
+def test_additions_are_appended_in_version_order() -> None:
+    """Each version's additions go on the end, so every earlier charset
+    is a prefix of every later one and the ``ա`` index test_order_is_stable
+    pins is never disturbed by an append."""
     characters = charset.character_list(include_space=False)
-    assert characters.endswith(charset.V2_ADDITIONS)
+    assert characters.endswith(charset.V2_ADDITIONS + charset.V3_ADDITIONS)
 
 
 def test_strays_counts_out_of_charset_characters() -> None:
@@ -82,3 +83,21 @@ def test_strays_ignores_whitespace() -> None:
 
 def test_covered_text_has_no_strays() -> None:
     assert charset.strays(charset.character_list()) == {}
+
+
+def test_v3_additions_are_present() -> None:
+    """Genuinely printed characters the corpus-wide diff found: the
+    literary ellipsis, encyclopedia editorial brackets, the numero sign
+    and superscript two."""
+    characters = charset.character_list()
+    for mark in "…[]№²":
+        assert mark in characters, f"missing {mark!r}"
+
+
+def test_transcriber_substitutions_stay_out_of_the_charset() -> None:
+    """U+2212 would give the model a new homoglyph to confuse with the
+    en dash; angle brackets are guillemets in disguise. Both are
+    normalised in wikisource.normalise_transcript instead."""
+    characters = charset.character_list()
+    assert "−" not in characters
+    assert "<" not in characters and ">" not in characters

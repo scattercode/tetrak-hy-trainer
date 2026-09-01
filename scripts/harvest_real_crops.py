@@ -81,7 +81,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
-from tetrak_hy_trainer import align, charset, heldout, synth  # noqa: E402
+from tetrak_hy_trainer import align, charset, heldout, synth, wikisource  # noqa: E402
 from tetrak_hy_trainer.align import Detection, Tier  # noqa: E402
 
 # Boxes shorter than this are detector noise -- rules, speckle, the edge of
@@ -319,7 +319,7 @@ def main() -> int:
     for position, page in enumerate(pages):
         split = "val" if args.val_every and position % args.val_every == 0 else "train"
         detections = detect_page(reader, page["image_path"])
-        truth = page["text_path"].read_text(encoding="utf-8")
+        truth = wikisource.normalise_transcript(page["text_path"].read_text(encoding="utf-8"))
         crops = align.align_page(
             detections,
             truth,

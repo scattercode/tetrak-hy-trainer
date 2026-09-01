@@ -231,10 +231,53 @@ def clean_wikitext(text: str) -> str:
     text = _HTML_TAG.sub("", text)
     text = _EMPHASIS.sub("", text)
 
+    text = normalise_transcript(text)
+
     lines = [re.sub(r"[ \t]+", " ", line).strip() for line in text.splitlines()]
     cleaned = "\n".join(lines)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip()
+
+
+# Transcriber substitutions, found by diffing the whole harvested corpus
+# against the charset (brief 012 stage 1.3). Each is a character the
+# transcripts use where the print shows something else -- the same class
+# of habit as the ASCII colon standing in for the Armenian full stop,
+# which v3's fine-tune faithfully learnt. Normalising here means the
+# label says what the page says.
+#
+# Left out deliberately: '|', '{', '}', '\\', '^', '`', '~' are garbled
+# Greek and Latin transliteration and unrendered maths markup ("x_1",
+# "a{3piy£}"), not print, so the charset filter should keep dropping
+# those tokens. Cyrillic and Arabic stay out of scope.
+_TRANSCRIPT_SUBSTITUTIONS = {
+    # Angle brackets for guillemets: "<Ազգ> և <Պահակ>" where the page
+    # prints «Ազգ» և «Պահակ». 2,931 occurrences corpus-wide.
+    "<": "«",
+    ">": "»",
+    # Minus sign and horizontal bar for dashes, in dialogue and glosses:
+    # "− Էֆենտի", "acceleratio − արագացում". 10,770 occurrences, most of
+    # them in the Western Armenian literary sources -- and U+2212 is a
+    # near-perfect homoglyph of the en dash, so admitting it to the
+    # charset would create a new confusion pair rather than fix one.
+    "\u2212": "–",
+    "\u2015": "—",
+    # A byte-order mark opening a page: pure encoding artefact.
+    "\ufeff": "",
+}
+
+
+def normalise_transcript(text: str) -> str:
+    """Fold transcriber substitutions onto what the page actually prints.
+
+    Applied by :func:`clean_wikitext` for new harvests, and again at read
+    time by the samplers, so transcripts harvested before this existed
+    get the same treatment without re-fetching several thousand pages.
+    Idempotent, which is what makes that safe.
+    """
+    for source, replacement in _TRANSCRIPT_SUBSTITUTIONS.items():
+        text = text.replace(source, replacement)
+    return text
 
 
 def index_to_file_title(index_title: str) -> str:
