@@ -188,6 +188,19 @@ An hour or two, not eleven.
 - Validation is on **real** crops, split by page. Synthetic validation is
   already 98.8% and says nothing about what is being fixed.
 
+**Stop early, and trust the page metric over the crop metric.** v3 was first
+run for 10,000 iterations and overfitted. Held-out per-crop accuracy sat in a
+93.4–95.1% band from iteration 500 onward while validation loss climbed — and
+on a 700-crop validation set that whole band is about four crops, so picking
+the best of twenty checkpoints was selecting noise. It landed on iteration
+8,000.
+
+The 3,000-iteration re-run scored **0.7356 raw against the long run's
+0.6792**: its *raw* output beat the long run's *folded* output, in a third of
+the time, at the same 95% crop accuracy. A few thousand iterations is the
+right order of magnitude for a fine-tune; the crop number will not tell you
+that, and the page evaluation will.
+
 ## 8. Measure what actually moved
 
 ```bash
@@ -226,6 +239,20 @@ skill in `tetrak-easyocr-armenian`, which pins the Hub revision and checksum.
 
 ---
 
+## Watching a run
+
+**There are two logs, and the useful one is not the obvious one.**
+`runs/<run>/train.log` is the orchestrating script's stdout: it goes quiet
+immediately after "training N iterations" and stays quiet for the whole run,
+so it looks hung when it is working. Per-iteration progress belongs to the
+vendored trainer's own log:
+
+```bash
+tail -f runs/<run>/saved_models/<run>/log_train.txt
+```
+
+Worth knowing before starting an eleven-hour run rather than an hour into one.
+
 ## Traps, collected
 
 - **`labels.csv` is not CSV.** The vendored trainer reads it with a regex
@@ -243,6 +270,14 @@ skill in `tetrak-easyocr-armenian`, which pins the Hub revision and checksum.
 - **Load EasyOCR with `["en"]`, never `["hy"]`.** EasyOCR ships no
   `hy_char.txt` so `["hy"]` raises FileNotFoundError; the setting is inert for
   a custom model anyway.
+- **Real-crop labels inherit whatever the transcribers did.** Between v2 and
+  v3 the `։`→`:` confusion moved the *wrong* way, because some ASE
+  transcripts write the Armenian full stop as an ASCII colon and the fine-tune
+  learnt that from its labels. Harmless in the shipped path — `fold_script`
+  maps it back — but it is the clearest evidence that a real-crop fine-tune
+  teaches the model the transcribers' conventions along with the page's. Check
+  the confusion table for entries that got *worse*, not only for the cluster
+  you were aiming at.
 - **The Portmind quarantine.** Nothing from the CC BY-NC `portmind-armenian-ocr`
   fork may enter this repository — no code, no annotations, no weights.
   Re-implementing ideas is fine; copying expression is not.
