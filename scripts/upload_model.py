@@ -69,7 +69,7 @@ REAL_EVAL_SOURCE = (
     "Armenian Soviet Encyclopedia vol. 2, pages 105-114 from Armenian "
     "Wikisource, proofread to quality level 4 (runs/eval/ase-vol2)"
 )
-REAL_EVAL_METRIC = "tetrak_ocr.accuracy; higher is better for both figures"
+REAL_EVAL_METRIC = "tetrak_hy_trainer.accuracy; higher is better for both figures"
 
 # Every face the renderer actually used, from the `fonts:` line both runs
 # logged. Mshtakan ships with macOS; no font file is redistributed.

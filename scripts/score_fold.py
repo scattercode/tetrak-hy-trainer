@@ -28,7 +28,7 @@ joined for the numbers in brief 011's decision log entry for 2026-08-31
 ("v1 trained"). No inference is re-run.
 
 Scores each page against runs/eval/ase-vol2/text/<page>.txt with
-Tetrak's word_recall (order-insensitive), then averages across the ten
+word_recall (order-insensitive), then averages across the ten
 pages the same way scripts/evaluate_baselines.py does: the mean of the
 per-page scores, not a pooled word count -- so this reproduces the
 0.5014 baseline as a sanity check before reporting (a) and (b).
@@ -36,12 +36,11 @@ per-page scores, not a pooled word count -- so this reproduces the
 Prerequisites: tetrak-easyocr-armenian's own venv, which has easyocr
 installed (fold.py itself needs nothing heavier than the standard
 library, but importing the tetrak_hy package pulls in easyocr's model
-re-export regardless of which name is imported from it); Tetrak's
-`src/` on PYTHONPATH, for tetrak_ocr.accuracy.word_recall (stdlib-only,
-no heavy dependency of its own). Run from the trainer repo root:
+re-export regardless of which name is imported from it). The metric comes
+from this repository's own `tetrak_hy_trainer.accuracy`, so no private
+checkout is needed. Run from the trainer repo root:
 
-    PYTHONPATH=../tetrak/src \
-        ../tetrak-easyocr-armenian/.venv/bin/python scripts/score_fold.py
+    ../tetrak-easyocr-armenian/.venv/bin/python scripts/score_fold.py
 """
 
 from __future__ import annotations
@@ -51,7 +50,8 @@ import tarfile
 from pathlib import Path
 
 from tetrak_hy.fold import fold_script
-from tetrak_ocr.accuracy import word_recall
+
+from tetrak_hy_trainer.accuracy import word_recall
 
 EVAL_DIR = Path(__file__).resolve().parent.parent / "runs" / "eval" / "ase-vol2"
 DEFAULT_PREDICTIONS = EVAL_DIR / "predictions-v1.tar.gz"

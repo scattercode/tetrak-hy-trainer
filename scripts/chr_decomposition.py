@@ -128,7 +128,8 @@ def main() -> int:
     args = parser.parse_args()
 
     from tetrak_hy import fold_script
-    from tetrak_ocr.accuracy import character_similarity
+
+    from tetrak_hy_trainer.accuracy import character_similarity
 
     pages = load_predicted_pages(args.predictions)
     stages: dict[str, list[float]] = {}

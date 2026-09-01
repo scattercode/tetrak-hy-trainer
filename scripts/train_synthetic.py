@@ -202,7 +202,8 @@ def evaluate_pages(bundle: Path, eval_dir: Path) -> None:
     import json
 
     import easyocr
-    from tetrak_ocr.accuracy import character_similarity, word_recall
+
+    from tetrak_hy_trainer.accuracy import character_similarity, word_recall
 
     reader = easyocr.Reader(
         ["en"],  # no hy_char.txt ships with EasyOCR; inert for custom models
