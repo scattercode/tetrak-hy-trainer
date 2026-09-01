@@ -28,10 +28,15 @@ model drops into a stock EasyOCR install.
 
 These are the v3 weights: v2 fine-tuned on **real crops cut from
 scanned pages**, not rendered ones. **Paired with the fold described
-below, v3 reads 0.771 word recall on real scans — the highest measured
-here, ahead of `tesseract -l hye` at 0.662 and of Marker at 0.766.**
-The model alone reads 0.736; the difference is a one-line post-process
-shipped in the companion package, and both figures are given below.
+below, v3 reads 0.771 word recall on real scans — ahead of
+`tesseract -l hye` at 0.662 and of Marker at 0.766, and two points
+behind Calfa's `hye-calfa-n` at 0.789.** Calfa's model, measured on the
+same pages, is the strongest Armenian OCR here; it is CC BY-NC 4.0.
+This one is the strongest **permissively licensed** reader of the
+script measured on this material — Apache 2.0, usable and bundlable
+without a licence conversation. The model alone reads 0.736; the
+difference is a one-line post-process shipped in the companion package,
+and both figures are given below.
 
 Character similarity is a different story and still a weak one. See
 below: it measures reading order more than it measures recognition.
@@ -67,7 +72,8 @@ figures.
 
 | Backend | Char similarity | Word recall |
 |---|---|---|
-| **tetrak_hy v3 + `fold_script`** | **0.147** | **0.771** |
+| `hye-calfa-n` (Calfa, CC BY-NC) | **0.840** | **0.789** |
+| **tetrak_hy v3 + `fold_script`** | 0.147 | 0.771 |
 | marker | 0.258 | 0.766 |
 | tetrak_hy v3 (raw) | 0.147 | 0.736 |
 | tetrak_hy v2 + `fold_script` | 0.117 | 0.692 |

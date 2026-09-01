@@ -263,6 +263,11 @@ VERSIONS = {
             "source": REAL_EVAL_SOURCE,
             "metric": REAL_EVAL_METRIC,
             "baselines": {
+                "hye-calfa-n": {
+                    "char_similarity": 0.8403,
+                    "word_recall": 0.7889,
+                    "note": "Calfa's Tesseract model, CC BY-NC 4.0 -- measured 2026-09-01 on the same pages",
+                },
                 "marker": {"char_similarity": 0.2580, "word_recall": 0.7660},
                 "tesseract-hye": {"char_similarity": 0.6968, "word_recall": 0.6621},
                 "tesseract-hye-auto": {"char_similarity": 0.1281, "word_recall": 0.6637},
@@ -273,12 +278,15 @@ VERSIONS = {
             },
             "note": (
                 "word_recall_with_fold applies tetrak_hy.fold_script and is "
-                "what the shipped pipeline earns. At 0.7707 it is the highest "
-                "word recall measured on this set, ahead of marker's 0.7660 "
-                "and tesseract-hye's 0.6621. char_similarity remains dominated "
-                "by reading order rather than recognition, for the reason "
-                "recorded against v1, and is not comparable across backends "
-                "that serialise pages differently."
+                "what the shipped pipeline earns. At 0.7707 it is ahead of "
+                "marker's 0.7660 and tesseract-hye's 0.6621, and two points "
+                "behind hye-calfa-n's 0.7889 -- Calfa's CC BY-NC model, "
+                "measured on the same pages, is the strongest Armenian OCR "
+                "here; this is the strongest permissively licensed one. "
+                "char_similarity remains dominated by reading order rather "
+                "than recognition, for the reason recorded against v1, and is "
+                "not comparable across backends that serialise pages "
+                "differently."
             ),
         },
     },
