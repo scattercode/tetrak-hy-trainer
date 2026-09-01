@@ -46,6 +46,7 @@ no heavy dependency of its own). Run from the trainer repo root:
 
 from __future__ import annotations
 
+import argparse
 import tarfile
 from pathlib import Path
 
@@ -53,7 +54,7 @@ from tetrak_hy.fold import fold_script
 from tetrak_ocr.accuracy import word_recall
 
 EVAL_DIR = Path(__file__).resolve().parent.parent / "runs" / "eval" / "ase-vol2"
-PREDICTIONS_TARBALL = EVAL_DIR / "predictions-v1.tar.gz"
+DEFAULT_PREDICTIONS = EVAL_DIR / "predictions-v1.tar.gz"
 TEXT_DIR = EVAL_DIR / "text"
 
 # U+2024 ONE DOT LEADER, the transcripts' abbreviation dot -- absent from
@@ -67,10 +68,10 @@ def punctuation_fold(text: str) -> str:
     return text.replace(ABBREVIATION_DOT, ".")
 
 
-def load_predictions() -> dict[str, str]:
-    """Page number -> the saved v1 prediction text, one box per line."""
+def load_predictions(tarball: Path = DEFAULT_PREDICTIONS) -> dict[str, str]:
+    """Page number -> the saved prediction text, one box per line."""
     predictions = {}
-    with tarfile.open(PREDICTIONS_TARBALL) as archive:
+    with tarfile.open(tarball) as archive:
         for member in archive.getmembers():
             if not member.name.endswith(".txt"):
                 continue
@@ -81,7 +82,16 @@ def load_predictions() -> dict[str, str]:
 
 
 def main() -> None:
-    predictions = load_predictions()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--predictions",
+        type=Path,
+        default=DEFAULT_PREDICTIONS,
+        help="saved predictions tarball to score (default: v1's)",
+    )
+    args = parser.parse_args()
+
+    predictions = load_predictions(args.predictions)
     pages = sorted(predictions, key=int)
 
     baseline_scores = []

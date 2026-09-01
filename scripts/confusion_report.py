@@ -87,6 +87,44 @@ def load_predicted_pages(tarball: Path) -> dict[int, list[Detection]]:
     return pages
 
 
+def save_predictions(pages: dict[int, list[Detection]], tarball: Path) -> None:
+    """Write predictions in the same shape as ``predictions-v1.tar.gz``.
+
+    One ``pred/<page>.json`` per page carrying box, text and confidence,
+    and a ``pred/<page>.txt`` of one box's reading per line in detector
+    order. Saving them means a model can be re-scored later -- by
+    ``score_fold.py``, or against a future confusion table -- without
+    paying for inference again, which is how v1's numbers stayed
+    reproducible after its bundle was published.
+    """
+    import io
+
+    tarball.parent.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(tarball, "w:gz") as archive:
+        for page, detections in sorted(pages.items()):
+            payload = [
+                {
+                    "box": [
+                        [d.bbox[0], d.bbox[1]],
+                        [d.bbox[2], d.bbox[1]],
+                        [d.bbox[2], d.bbox[3]],
+                        [d.bbox[0], d.bbox[3]],
+                    ],
+                    "text": d.text,
+                    "conf": d.confidence,
+                }
+                for d in detections
+            ]
+            for name, body in (
+                (f"pred/{page}.json", json.dumps(payload, ensure_ascii=False)),
+                (f"pred/{page}.txt", "\n".join(d.text for d in detections)),
+            ):
+                data = body.encode("utf-8")
+                info = tarfile.TarInfo(name)
+                info.size = len(data)
+                archive.addfile(info, io.BytesIO(data))
+
+
 def read_pages_with_model(bundle: Path, eval_dir: Path, gpu: bool) -> dict[int, list[Detection]]:
     """Run a bundle over the evaluation scans."""
     sys.path.insert(0, str(REPO / "scripts"))
@@ -115,6 +153,13 @@ def main() -> int:
         action="store_true",
         help="apply tetrak_hy.fold_script first, leaving only what it does not fix",
     )
+    parser.add_argument(
+        "--save-predictions",
+        type=Path,
+        default=None,
+        help="with --bundle, also write the readings to this tarball so the "
+        "model can be re-scored later without paying for inference again",
+    )
     parser.add_argument("--gpu", action="store_true")
     args = parser.parse_args()
 
@@ -130,6 +175,11 @@ def main() -> int:
         pages = read_pages_with_model(args.bundle, args.eval_dir, gpu=args.gpu)
     if not pages:
         raise SystemExit("no pages to score")
+
+    # Before the fold, so the saved readings are what the model emitted.
+    if args.save_predictions:
+        save_predictions(pages, args.save_predictions)
+        print(f"saved predictions to {args.save_predictions}", flush=True)
 
     word_pairs: list[tuple[str, str]] = []
     aligned = 0
