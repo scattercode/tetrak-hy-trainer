@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-09-01
+
+### Added
+
+- Add Hugging Face dataset packaging and upload
+- Add Hugging Face model packaging and upload
+- Add the crops-v1 dataset configuration
+- Add the real-crop harvest, fine-tune and confusion-report scripts
+
+### Changed
+
+- Resolve --eval-dir before the run and re-push the card alone
+- Make the model upload v1-aware
+- Score the fold against v1's saved predictions
+- Widen the v2 charset with the abbreviation dot and degree sign
+- Align detector boxes to transcripts for real-crop harvesting
+- Score any model's saved predictions, not just v1's
+- Make the model upload v2-aware and record v0/v1's defects
+
+### Fixed
+
+- Skip fonts missing a glyph when choosing a face to render with
+- Let --images top up a harvest without losing text or manifest pages
+- Stop csv.writer wrapping comma-bearing labels in quotation marks
+
 ## [0.2.0] - 2026-08-30
 
 ### Added
