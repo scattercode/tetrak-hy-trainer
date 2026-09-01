@@ -23,9 +23,10 @@ shape, so precision beats recall throughout.
 measured on ten of its pages, and it is the one directory in this repo
 with scans already sitting in it. See :mod:`tetrak_hy_trainer.heldout`.
 
-Input is a harvest directory that has page images. The volumes taken for
-v0 and v1 were harvested text-only -- synthesis needed corpus text and
-nothing else -- so top them up first (this re-fetches no wikitext)::
+Input is one or more harvest directories that have page images. The
+volumes taken for v0 and v1 were harvested text-only -- synthesis needed
+corpus text and nothing else -- so top them up first (this re-fetches no
+wikitext)::
 
     python -m tetrak_hy_trainer.harvest \\
         --index "Ինդեքս:… (Soviet Armenian Encyclopedia) 1.djvu" \\
@@ -50,12 +51,21 @@ Prerequisites: easyocr and torch. The trainer's own venv has neither
 convenient one::
 
     ../tetrak-easyocr-armenian/.venv/bin/python scripts/harvest_real_crops.py \\
-        --harvest-dir runs/v0/harvest --bundle runs/v2/bundle \\
-        --out runs/v2/all_data --limit 60
+        --harvest-dir runs/v1/harvest-vol5 runs/v1/harvest-vol6 \\
+        --bundle runs/v2/bundle --out runs/v2/all_data
+
+Pass every volume in **one** run. A second run into the same ``--out``
+truncates the first's ``labels.csv``, and page numbers repeat between
+volumes; crops are named ``v<volume>_<page>_<n>.png`` so they cannot
+collide.
 
 Writing into the v2 run's ``all_data/`` puts ``real_train`` beside
 ``syn_train``, which is what lets ``finetune_real.py`` mix the two in one
 batch -- the vendored trainer takes a single dataset root.
+
+Read the model bundle you pass carefully: it decides which words align.
+A better recogniser matches more of the transcript, so harvest with the
+newest weights even though the fine-tune starts from them too.
 """
 
 from __future__ import annotations
@@ -98,23 +108,39 @@ _TRAILING_DASHES = "-–—֊"
 _STRAY_QUOTES = "\"'«»"
 
 
-def load_pages(harvest_dir: Path) -> tuple[str, list[dict]]:
-    """Return the manifest's index title and its entries that have images."""
-    manifest_path = harvest_dir / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    index_title = manifest["index"]
+def load_pages(harvest_dirs: list[Path]) -> tuple[list[str], list[dict]]:
+    """Every page across *harvest_dirs* that has both a scan and a transcript.
 
-    # Before anything else, and against the manifest rather than the
-    # directory name: a copied or renamed directory must not get past this.
-    heldout.assert_not_held_out(index_title, source=str(manifest_path))
+    Several volumes in one run, rather than one run per volume, because
+    the output is a single dataset: a second run writing into the same
+    ``--out`` truncates the first's ``labels.csv``, and crop filenames
+    drawn from page numbers alone would collide between volumes anyway.
+    Each page therefore carries the volume it came from, and the crops
+    are named for it.
+    """
+    index_titles: list[str] = []
+    pages: list[dict] = []
 
-    pages = []
-    for entry in manifest["pages"]:
-        image = harvest_dir / "images" / f"{entry['page_number']}.jpg"
-        text = harvest_dir / entry["text"]
-        if image.exists() and text.exists():
-            pages.append({**entry, "image_path": image, "text_path": text})
-    return index_title, pages
+    for harvest_dir in harvest_dirs:
+        manifest_path = harvest_dir / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        index_title = manifest["index"]
+
+        # Before anything else, and against the manifest rather than the
+        # directory name: a copied or renamed directory must not get past
+        # this.
+        heldout.assert_not_held_out(index_title, source=str(manifest_path))
+        index_titles.append(index_title)
+
+        volume = heldout.volume_of(index_title)
+        for entry in manifest["pages"]:
+            image = harvest_dir / "images" / f"{entry['page_number']}.jpg"
+            text = harvest_dir / entry["text"]
+            if image.exists() and text.exists():
+                pages.append({**entry, "image_path": image, "text_path": text, "volume": volume})
+
+    pages.sort(key=lambda page: (page["volume"] or 0, page["page_number"]))
+    return index_titles, pages
 
 
 def build_reader(bundle: Path, gpu: bool):
@@ -222,7 +248,13 @@ def cut(image, bbox, margin_fraction: float):
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--harvest-dir", type=Path, required=True, help="harvest directory holding images/ + text/"
+        "--harvest-dir",
+        type=Path,
+        required=True,
+        nargs="+",
+        help="one or more harvest directories holding images/ + text/; pass them "
+        "together rather than in separate runs, which would truncate each "
+        "other's labels.csv",
     )
     parser.add_argument(
         "--bundle", type=Path, required=True, help="tetrak_hy bundle to read the pages with"
@@ -251,16 +283,18 @@ def main() -> int:
     tiers = {Tier(name.strip()) for name in args.tiers.split(",") if name.strip()}
     allowed = set(charset.character_list())
 
-    index_title, pages = load_pages(args.harvest_dir)
+    index_titles, pages = load_pages(args.harvest_dir)
     if not pages:
         raise SystemExit(
-            f"no page has both an image and a transcript under {args.harvest_dir}. "
-            f"Harvest the scans first: python -m tetrak_hy_trainer.harvest "
-            f"--index {index_title!r} --out {args.harvest_dir} --images"
+            f"no page has both an image and a transcript under "
+            f"{[str(d) for d in args.harvest_dir]}. Harvest the scans first with "
+            f"python -m tetrak_hy_trainer.harvest ... --images"
         )
     if args.limit is not None:
         pages = pages[: args.limit]
-    print(f"{len(pages)} page(s) with scans from {index_title}", flush=True)
+    print(f"{len(pages)} page(s) with scans from {len(index_titles)} volume(s)", flush=True)
+    for title in index_titles:
+        print(f"  {title}", flush=True)
 
     from PIL import Image
 
@@ -302,13 +336,14 @@ def main() -> int:
                 continue
             if not usable(crop, allowed, args.max_label_length, median_height):
                 continue
-            filename = f"{page['page_number']:04d}_{index:04d}.png"
+            filename = f"v{page['volume'] or 0}_{page['page_number']:04d}_{index:04d}.png"
             cut(image, crop.bbox, args.margin_fraction).save(folders[split] / filename)
             rows[split].append((filename, crop.label))
             totals[crop.tier] += 1
             kept += 1
             review.append(
                 {
+                    "volume": page["volume"],
                     "page": page["page_number"],
                     "split": split,
                     "file": filename,
@@ -323,7 +358,8 @@ def main() -> int:
 
         counts = align.tier_counts(crops)
         print(
-            f"  p{page['page_number']} [{split}] {len(detections)} boxes -> "
+            f"  vol{page['volume']} p{page['page_number']} [{split}] "
+            f"{len(detections)} boxes -> "
             f"{kept} crops (exact {counts[Tier.EXACT]}, near {counts[Tier.NEAR]}, "
             f"bracketed {counts[Tier.BRACKETED]})",
             flush=True,
@@ -339,6 +375,7 @@ def main() -> int:
         writer = csv.DictWriter(
             handle,
             fieldnames=[
+                "volume",
                 "page",
                 "split",
                 "file",
@@ -353,11 +390,13 @@ def main() -> int:
         writer.writerows(review)
 
     summary = {
-        "index": index_title,
-        "harvest_dir": str(args.harvest_dir),
+        "indexes": index_titles,
+        "harvest_dirs": [str(d) for d in args.harvest_dir],
         "bundle": str(args.bundle),
-        "pages": [page["page_number"] for page in pages],
-        "revids": {str(page["page_number"]): page.get("revid") for page in pages},
+        "pages": [f"vol{page['volume']}/{page['page_number']}" for page in pages],
+        "revids": {
+            f"vol{page['volume']}/{page['page_number']}": page.get("revid") for page in pages
+        },
         "settings": {
             "min_similarity": args.min_similarity,
             "bracket_span": args.bracket_span,
