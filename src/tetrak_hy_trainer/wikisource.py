@@ -67,6 +67,26 @@ class WikisourceClient:
         if session is None:
             session = requests.Session()
             session.headers["User-Agent"] = USER_AGENT
+            # A multi-thousand-page harvest will meet transient failures:
+            # the first 5,500-page tranche died at page ~660 when the
+            # server closed a connection mid-request. Retry the transport
+            # errors and the throttling statuses with exponential backoff;
+            # anything that survives four attempts is a real problem and
+            # still raises. Only installed on the default session, so
+            # tests injecting a fake see every request exactly once.
+            from requests.adapters import HTTPAdapter
+            from urllib3.util.retry import Retry
+
+            retry = Retry(
+                total=4,
+                connect=4,
+                read=4,
+                status=4,
+                backoff_factor=2.0,
+                status_forcelist=(429, 500, 502, 503, 504),
+                allowed_methods=("GET",),
+            )
+            session.mount("https://", HTTPAdapter(max_retries=retry))
         self.session = session
         self.pause = pause
         self._last_request = 0.0
