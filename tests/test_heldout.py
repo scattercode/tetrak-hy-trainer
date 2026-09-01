@@ -57,3 +57,33 @@ class TestAssertNotHeldOut:
         with pytest.raises(heldout.HeldOutDataError) as caught:
             heldout.assert_not_held_out(VOLUME_2)
         assert "do not work around" in str(caught.value)
+
+
+class TestWorkRegistry:
+    """Brief 012's widening: per-work held-out pages for non-ASE sources."""
+
+    def test_a_work_with_no_entry_has_no_held_out_pages(self) -> None:
+        assert heldout.held_out_pages("Ինդեքս:Faustus of Byzantium.djvu") is None
+
+    def test_registered_pages_are_held_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setitem(heldout.WORK_PAGES, "Faustus of Byzantium", frozenset({40, 41}))
+        title = "Ինդեքս:Faustus of Byzantium, History of Armenia, 1968.djvu"
+        assert heldout.page_is_held_out(title, 40)
+        assert not heldout.page_is_held_out(title, 42)
+
+    def test_every_ase_vol2_page_is_held_out_without_an_entry(self) -> None:
+        title = "Ինդեքս:Հայկական Սովետական Հանրագիտարան (Soviet Armenian Encyclopedia) 2.djvu"
+        assert heldout.page_is_held_out(title, 1)
+        assert heldout.page_is_held_out(title, 700)
+
+    def test_volume_2_of_another_work_is_not_condemned(self) -> None:
+        """The whole-volume rule is the ASE's, not a rule about the digit 2."""
+        assert not heldout.is_held_out("Ինդեքս:Nar-Dos, Collected works, vol. 2.djvu")
+
+    def test_new_ase_volumes_are_not_held_out(self) -> None:
+        for volume in (7, 9, 13):
+            title = (
+                "Ինդեքս:Հայկական Սովետական Հանրագիտարան "
+                f"(Soviet Armenian Encyclopedia) {volume}.djvu"
+            )
+            assert not heldout.page_is_held_out(title, 100)

@@ -134,6 +134,10 @@ def load_pages(harvest_dirs: list[Path]) -> tuple[list[str], list[dict]]:
 
         volume = heldout.volume_of(index_title)
         for entry in manifest["pages"]:
+            # Per-page hold-outs (brief 012's registry): an evaluation
+            # slice inside an otherwise-trainable work never becomes crops.
+            if heldout.page_is_held_out(index_title, entry["page_number"]):
+                continue
             image = harvest_dir / "images" / f"{entry['page_number']}.jpg"
             text = harvest_dir / entry["text"]
             if image.exists() and text.exists():

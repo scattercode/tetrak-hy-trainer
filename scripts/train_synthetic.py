@@ -42,15 +42,36 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO / "training"))
 
-from tetrak_hy_trainer import augment, charset, packaging, synth, train_config  # noqa: E402
+from tetrak_hy_trainer import (  # noqa: E402
+    augment,
+    charset,
+    heldout,
+    packaging,
+    synth,
+    train_config,
+)
 
 
 def clean_token_runs(harvest_dirs: list[Path]) -> list[list[str]]:
-    """Runs of consecutive charset-clean tokens, per stretch of page text."""
+    """Runs of consecutive charset-clean tokens, per stretch of page text.
+
+    Held-out pages are skipped: rendering an evaluation page's transcript
+    as synthetic training data would let the model memorise the exact
+    text it is later scored on reading. The registry, not the filesystem,
+    decides -- the text files may well be on disk.
+    """
+    import json
+
     allowed = set(charset.character_list())
     runs: list[list[str]] = []
     for harvest_dir in harvest_dirs:
+        manifest = harvest_dir / "manifest.json"
+        index_title = (
+            json.loads(manifest.read_text(encoding="utf-8"))["index"] if manifest.exists() else ""
+        )
         for text_file in sorted((harvest_dir / "text").glob("*.txt")):
+            if index_title and heldout.page_is_held_out(index_title, int(text_file.stem)):
+                continue
             current: list[str] = []
             for token in text_file.read_text(encoding="utf-8").split():
                 if 1 <= len(token) <= 24 and set(token) <= allowed:
@@ -256,7 +277,10 @@ def main() -> int:
     samples = build_line_samples(harvest_dirs, args.max_samples, rng, args.line_tokens_max)
     print(f"line samples: {len(samples)}", flush=True)
 
-    fonts = sorted((REPO / "runs" / "v0" / "fonts").glob("*.tt*"))
+    # .tt* catches TTF and TTC; the GHEA faces are OTF, which Pillow reads
+    # just as happily and the original glob silently ignored.
+    font_dir = REPO / "runs" / "v0" / "fonts"
+    fonts = sorted([*font_dir.glob("*.tt*"), *font_dir.glob("*.otf")])
     system_font = Path("/System/Library/Fonts/Supplemental/Mshtakan.ttc")
     if system_font.exists():
         fonts.append(system_font)

@@ -25,6 +25,18 @@ v0, and the pages either side of the evaluation set share its typesetting,
 its scanning session and its paper. Keeping the volume whole costs a
 little data and keeps the evaluation honest against material the model
 has never met.
+
+Brief 012 widened the corpus beyond the encyclopedia, and with it this
+module widened from one rule to a **registry**: each new work
+contributes held-out pages of its own (:data:`WORK_PAGES`), chosen for
+body-text density before anything trained on the work, so every register
+the model learns can also be honestly evaluated. Held-out pages are
+excluded from *both* uses of a harvest — real crops, obviously, but also
+the synthetic sampler: rendering a held-out page's transcript would let
+the model memorise the exact text it is later evaluated on reading.
+
+New ASE volumes (7--13) get no entries of their own: volume 2, held out
+whole, already evaluates that register and face.
 """
 
 from __future__ import annotations
@@ -36,6 +48,14 @@ HELD_OUT_VOLUME = 2
 
 #: The evaluation pages themselves, for error messages that say *why*.
 EVALUATION_PAGES = range(105, 115)
+
+#: Held-out pages per non-ASE work, keyed by a substring of the index
+#: title. Chosen by body-text token density from the harvested
+#: transcripts (2026-09-01), the same way the ASE evaluation pages were,
+#: and fixed here before anything trained on these works. To evaluate on
+#: one of these slices, build its eval directory from exactly these
+#: pages; to widen one, do it before the next training run, never after.
+WORK_PAGES: dict[str, frozenset[int]] = {}
 
 # The Wikisource index titles carry the volume as a trailing "<n>.djvu", as in
 # "Ինդեքս:Հայկական Սովետական Հանրագիտարան (Soviet Armenian Encyclopedia) 2.djvu".
@@ -66,7 +86,36 @@ def is_held_out(index_title: str) -> bool:
         True for volume 2 in its entirety. See the module docstring for
         why the whole volume rather than the ten evaluation pages.
     """
-    return volume_of(index_title) == HELD_OUT_VOLUME
+    if volume_of(index_title) != HELD_OUT_VOLUME:
+        return False
+    # The volume regex alone would also condemn volume 2 of *any* work in
+    # the registry era; whole-volume hold-out is an ASE rule.
+    return "Soviet Armenian Encyclopedia" in index_title
+
+
+def held_out_pages(index_title: str) -> frozenset[int] | None:
+    """The held-out page numbers for *index_title*'s work, if any.
+
+    Args:
+        index_title: The manifest's ``index`` field.
+
+    Returns:
+        ``None`` when the work has no held-out pages (or is held out
+        whole -- check :func:`is_held_out` first for that case), else the
+        page numbers reserved for evaluation.
+    """
+    for needle, pages in WORK_PAGES.items():
+        if needle in index_title:
+            return pages
+    return None
+
+
+def page_is_held_out(index_title: str, page_number: int) -> bool:
+    """Whether one page of a work is reserved for evaluation."""
+    if is_held_out(index_title):
+        return True
+    pages = held_out_pages(index_title)
+    return pages is not None and page_number in pages
 
 
 def assert_not_held_out(index_title: str, source: str = "") -> None:

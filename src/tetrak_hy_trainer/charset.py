@@ -43,6 +43,8 @@ the default may flip then.
 
 from __future__ import annotations
 
+from collections import Counter
+
 ARMENIAN_UPPER = "".join(chr(code) for code in range(0x0531, 0x0556 + 1))  # Ա–Ֆ
 ARMENIAN_LOWER = "".join(chr(code) for code in range(0x0561, 0x0586 + 1))  # ա–ֆ
 
@@ -100,3 +102,29 @@ def character_list(include_space: bool | None = None) -> str:
 def num_class(include_space: bool | None = None) -> int:
     """The CTC output size: every character plus the blank token at index 0."""
     return len(character_list(include_space)) + 1
+
+
+def strays(text: str) -> Counter[str]:
+    """Count every character in *text* that the charset has no class for.
+
+    The check brief 012 institutionalised after brief 011 paid for its
+    absence: U+2024, the transcripts' abbreviation dot, was missing from
+    v1's charset, so the training pipeline silently dropped every crop
+    containing it and 5.8% of the evaluation words were unwinnable by
+    construction. Five minutes of counting would have caught it before it
+    cost a training run — so now it is a function, run against every new
+    source before anything trains on it (``scripts/charset_diff.py``).
+
+    Whitespace is ignored: the tokeniser splits on it, so it never needs
+    a class of its own beyond the space :data:`INCLUDE_SPACE` governs.
+
+    Args:
+        text: Corpus text, typically a whole harvest's transcripts joined.
+
+    Returns:
+        Stray character -> occurrence count, most common first when
+        iterated via ``most_common()``. Empty means the charset covers
+        the material.
+    """
+    allowed = set(character_list(include_space=True))
+    return Counter(c for c in text if c not in allowed and not c.isspace())

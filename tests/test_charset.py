@@ -65,3 +65,20 @@ def test_v2_additions_are_appended_last() -> None:
     index test_order_is_stable pins) is untouched by the append itself."""
     characters = charset.character_list(include_space=False)
     assert characters.endswith(charset.V2_ADDITIONS)
+
+
+def test_strays_counts_out_of_charset_characters() -> None:
+    """The check that would have caught U+2024 before it cost a training
+    run: count what the corpus contains that the charset cannot emit."""
+    found = charset.strays("հայ п. § 5 «ok»")
+    assert found["п"] == 1
+    assert found["§"] == 1
+    assert "հ" not in found
+
+
+def test_strays_ignores_whitespace() -> None:
+    assert charset.strays("ա\tբ\nգ") == {}
+
+
+def test_covered_text_has_no_strays() -> None:
+    assert charset.strays(charset.character_list()) == {}
