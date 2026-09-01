@@ -68,6 +68,35 @@ breaks loading in the field:
   `lang_list` keeps `hy` first for self-description; the *loading*
   incantation uses `en`.
 
+### The held-out evaluation split
+
+Every published figure for this model — v0's 0.0745/0.2742, v1's
+0.1004/0.5014, the baselines they are measured against — comes from ten pages
+of **volume 2** of the Armenian Soviet Encyclopedia. Volume 2 is held out
+**whole**, not merely pages 105–114, and has never been harvested for
+training.
+
+`runs/eval/ase-vol2/` is also the one directory in this repository with page
+images already sitting in it, which makes it precisely the thing a harvester
+gets pointed at by accident. Nothing would fail; the numbers would simply
+start improving for the wrong reason, and every published figure would become
+wrong.
+
+`src/tetrak_hy_trainer/heldout.py` enforces this and is deliberately a module
+of its own so it cannot be diluted into some larger helper. It checks the
+harvest *manifest*, not the directory name, so a copied or renamed directory
+cannot get past it. Brief 012 widened it from one rule to a registry
+(`WORK_PAGES`): each new work contributes held-out pages of its own, chosen
+before anything trains on that work.
+
+Held-out material is excluded from **both** uses of a harvest — real crops
+obviously, but also the synthetic sampler, since rendering an evaluation
+page's transcript would let the model memorise the text it is later scored on
+reading.
+
+**If a guard fires, do not work around it.** Change the split deliberately in
+`heldout.py` and re-baseline everything.
+
 ### The charset is a single source of truth
 
 `src/tetrak_hy_trainer/charset.py` defines the character list. The
@@ -114,6 +143,50 @@ ruff format src tests tools scripts
 uv lock --check        # the lockfile matches pyproject.toml
 ```
 
+The pre-push hook runs pytest and needs `.venv` on PATH.
+
+### Which interpreter runs which script
+
+There are three, and picking the wrong one is the usual first five minutes
+lost. Each script's own docstring says so too; this is the map.
+
+| Script | Run with | Why |
+|---|---|---|
+| `upload_model.py`, `upload_dataset.py` | `uv run scripts/<name>.py` | PEP 723 inline dependencies in the file header |
+| `train_synthetic.py`, `finetune_real.py` | this repo's venv with the **`[train]`** extra | torch and the vendored trainer |
+| `harvest_real_crops.py` | **`../tetrak-easyocr-armenian/.venv/bin/python`** | needs easyocr *and* torch; `[train]` has no easyocr |
+| `score_fold.py` | the same sibling venv | imports the published `tetrak_hy` package |
+| `evaluate_baselines.py` | **Tetrak's venv, from Tetrak's repo root** | imports `tetrak_ocr` backends; the Claude backend needs Tetrak's `.env` |
+| everything else | this repo's plain `.venv` | standard library plus core deps |
+
+`evaluate_baselines.py` is the only script that may import from Tetrak. It
+benchmarks Tetrak's backends, so it can only run there anyway. **Nothing else
+may**: this repository is public and Tetrak is not, so an import of it is a
+dependency an outside contributor cannot satisfy. The scoring metrics are
+therefore a deliberate copy at `src/tetrak_hy_trainer/accuracy.py` — see its
+docstring for the obligation that copy carries.
+
+### The `runs/` layout the defaults expect
+
+`runs/` is gitignored in full, but the scripts' default paths assume this
+shape:
+
+```text
+runs/
+├── v0/fonts/            rendering faces (fetch_fonts.py)
+├── v0/harvest/          first text-only harvest
+├── v1/harvest-vol*/     per-volume harvests
+├── v2/all_data/         syn_train, syn_val, real_train, real_val — one root
+├── v2/saved_models/v2/  checkpoints; best_accuracy.pth
+├── v2/bundle/           packaged tetrak_hy.{yaml,py,pth}
+├── eval/ase-vol2/       the held-out evaluation set — never train on it
+└── census/census.json   the Wikisource census cache
+```
+
+For the pipeline itself — census, harvest, charset check, pre-train, real
+crops, fine-tune, evaluate, upload — load the **`tetrak-hy-training`** skill
+rather than reassembling it from the script docstrings.
+
 ## Dependencies and the lockfile
 
 Ranges live in `pyproject.toml`; the fully resolved tree (all extras, torch
@@ -150,11 +223,18 @@ them by hand.
 
 The staged plan (baselines gate, spike, synthetic pipeline, training,
 packaging) and its decision log live in Tetrak's product zone, not here —
-this repo does not restate them. Two decisions currently open there that
-directly affect this code:
+this repo does not restate them. Tetrak's ADRs are cited by number from both
+satellite repositories ("ADR 001", "decision 003"), so they are load-bearing
+here even though they are not published.
 
-1. **և / ԵՎ normalisation policy** — decided when real transcripts are in
-   hand; recorded in `charset.py` when made.
-2. **Whether `character_list` includes a space** — confirmed at spike
-   time against what the EasyOCR trainer and inference path actually
-   expect; `charset.py` carries the flag.
+Decisions that directly affect this code:
+
+1. **Whether `character_list` includes a space** — *settled*: it does. The
+   spike confirmed the EasyOCR trainer and inference path both expect it, and
+   every released model carries it. `INCLUDE_SPACE` remains a flag, but
+   turning it off would change `num_class` and invalidate every weight file,
+   like any other charset change.
+2. **և / ԵՎ normalisation policy** — still open. To be decided when enough
+   real transcripts are in hand, and recorded in `charset.py` when made.
+   Membership of `և` itself is not in question; only whether ԵՎ/Եւ forms in
+   ground truth are folded to it.

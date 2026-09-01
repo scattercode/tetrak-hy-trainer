@@ -43,6 +43,16 @@ emitted. Every knob here is therefore tuned for precision.
 Standard library only, so this is testable in CI with no OCR stack
 installed. The heavy half — running the detector, cutting the images —
 lives in ``scripts/harvest_real_crops.py``.
+
+**The column logic here has a twin.** ``tetrak_ocr.layout`` (in the private
+Tetrak repository) solves the same problem for transcript output, with its own
+copy of the gutter detection, the baseline grouping and the three straddle
+constants. The repositories cannot share code — this one is public and that
+one is not — so the duplication is deliberate and the drift is not: a fix to
+either is worth porting to the other. They differ in one respect only, and on
+purpose: a box straddling the gutter is *dropped* here (the transcripts omit
+running heads, so it has no truth token to pair with) and *placed* there
+(dropping text is not an option when the output is the text).
 """
 
 from __future__ import annotations

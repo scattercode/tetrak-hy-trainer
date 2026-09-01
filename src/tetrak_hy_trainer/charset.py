@@ -35,10 +35,13 @@ Composition
   charset is still a new, incompatible version (see below), just a
   minimal diff against v1's.
 
-The space character is a flag (:data:`INCLUDE_SPACE`) rather than a fact:
-whether EasyOCR's trainer and inference path expect it in
-``character_list`` is confirmed at spike time (stage 3 in the README), and
-the default may flip then.
+The space character is a flag (:data:`INCLUDE_SPACE`) rather than a fact,
+because it was an open question when this was written. **It is settled: the
+space is in.** The spike confirmed the EasyOCR trainer and inference path both
+expect it in ``character_list``, and every released model (v0 onwards) carries
+it — so the flag is now a knob nobody should turn, not a decision still to
+make. Turning it off would change ``num_class`` and invalidate every weight
+file, like any other charset change.
 """
 
 from __future__ import annotations
@@ -66,8 +69,9 @@ COMMON_PUNCTUATION = ".,:;!?'\"()-–—/%&+=*"
 # to keep the diff against v1's charset a pure append.
 V2_ADDITIONS = "․°"
 
-# Confirmed at spike time against what the EasyOCR trainer actually
-# expects; see the module docstring.
+# Settled at spike time against what the EasyOCR trainer actually expects,
+# and baked into every released model since v0. Not a switch to flip: see
+# the module docstring.
 INCLUDE_SPACE = True
 
 

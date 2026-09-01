@@ -31,7 +31,27 @@ from dataclasses import dataclass
 import requests
 
 API_URL = "https://hy.wikisource.org/w/api.php"
-USER_AGENT = "tetrak-hy-trainer/0.1 (https://github.com/scattercode/tetrak-hy-trainer)"
+
+
+def _user_agent() -> str:
+    """A descriptive User-Agent, per Wikimedia's etiquette policy.
+
+    The version is read from the package rather than typed here, where it
+    stopped at 0.1 through three releases -- a stale version in a User-Agent
+    is worse than none, since the whole point is that an operator seeing
+    unusual traffic can tell what is making it and when it changed.
+    """
+    try:
+        # ._version, not the package root: this module is imported *by* the
+        # package, so reaching back up to it would be a needless circular
+        # import to have to reason about.
+        from ._version import __version__
+    except ImportError:  # pragma: no cover - source checkout without a build
+        __version__ = "0+unknown"
+    return f"tetrak-hy-trainer/{__version__} (https://github.com/scattercode/tetrak-hy-trainer)"
+
+
+USER_AGENT = _user_agent()
 
 # ProofreadPage quality levels. 3 and 4 are human-verified; everything
 # below is untrusted for training purposes.
