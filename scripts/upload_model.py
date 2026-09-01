@@ -75,6 +75,31 @@ REAL_EVAL_METRIC = "tetrak_ocr.accuracy; higher is better for both figures"
 # logged. Mshtakan ships with macOS; no font file is redistributed.
 FONTS = ["NotoSansArmenian.ttf", "NotoSerifArmenian.ttf", "Mshtakan.ttc"]
 
+# Defects found after a version shipped. Recorded against the versions
+# that carry them rather than quietly fixed forward, because the weights
+# are published and people may be running them: a user seeing spurious
+# quotation marks in v1's output deserves to find out why, and that the
+# fix is to upgrade.
+LABEL_QUOTING_DEFECT = (
+    "21% of the training labels (36,918 of 175,500 for v1) were wrapped in "
+    "quotation marks the images do not show. The trainer reads labels.csv "
+    "with a regex splitting on the first comma rather than as CSV, so "
+    "csv.writer's quoting of comma-bearing labels became part of the label. "
+    "The model learnt it: inserting a quotation mark is the commonest single "
+    "error in v1's output on the evaluation pages, ahead of every genuine "
+    "character confusion. Fixed for v2, which does not have it. Found "
+    "2026-09-01."
+)
+
+MISSING_ABBREVIATION_DOT = (
+    "U+2024 ONE DOT LEADER, which the source transcripts use as the "
+    "abbreviation dot, was absent from the charset, so the training pipeline "
+    "silently dropped every crop containing it and the model has no class to "
+    "emit it with. On the evaluation pages 518 words (5.8%) are therefore "
+    "unwinnable, and the model emits the character zero times. Fixed for v2, "
+    "whose charset includes it. Found 2026-08-31."
+)
+
 # What each released version was trained on and what it scored, kept per
 # version rather than as generic strings: a release whose numbers are not
 # written down here is a release nobody can check. An unknown tag is refused
@@ -99,6 +124,7 @@ VERSIONS = {
             "source": REAL_EVAL_SOURCE,
             "metric": REAL_EVAL_METRIC,
         },
+        "known_defects": [LABEL_QUOTING_DEFECT, MISSING_ABBREVIATION_DOT],
     },
     "v1": {
         # runs/v1/train.log; the recipe is train_synthetic.py's defaults --
@@ -135,6 +161,63 @@ VERSIONS = {
                 "because the evaluation joins detected lines with a newline in "
                 "detector order. v1's genuine recognition gap against "
                 "tesseract-hye is word recall 0.50 vs 0.66."
+            ),
+        },
+        "known_defects": [LABEL_QUOTING_DEFECT, MISSING_ABBREVIATION_DOT],
+    },
+    "v2": {
+        # runs/v2/train.log; v1's recipe unchanged -- the differences are the
+        # widened charset and two data fixes, not the training settings.
+        "recipe": "scripts/train_synthetic.py (defaults; 150,000 iterations)",
+        "dataset_config": None,  # rendered locally; see the note below
+        "dataset_note": (
+            "rendered locally from the harvested proofread pages rather than "
+            "from a published dataset configuration: the v2 charset admits "
+            "U+2024, so the crops differ from the crops-v1 configuration and "
+            "a crops-v2 upload has not been made"
+        ),
+        "charset": {
+            "num_class": 170,
+            "added": ["U+2024 ONE DOT LEADER", "U+00B0 DEGREE SIGN"],
+            "note": (
+                "a charset change is a new model version by construction: CTC "
+                "class indices are positional, so v2 weights cannot be loaded "
+                "under v1's yaml or the reverse"
+            ),
+        },
+        "synthetic_validation": {
+            "word_accuracy": 99.333,
+            "norm_edit_distance": 0.9989,
+            "note": (
+                "degraded validation crops, as v1's -- comparable with v1's "
+                "98.8% rather than with v0's undegraded 99.722%"
+            ),
+        },
+        "real_scan_evaluation": {
+            "char_similarity": 0.1166,
+            "word_recall": 0.6073,
+            "word_recall_with_fold": 0.6919,
+            "pages": 10,
+            "source": REAL_EVAL_SOURCE,
+            "metric": REAL_EVAL_METRIC,
+            "baselines": {
+                "tesseract-hye": {"char_similarity": 0.6968, "word_recall": 0.6621},
+                "tesseract-hye-auto": {"char_similarity": 0.1281, "word_recall": 0.6637},
+                "marker": {"char_similarity": 0.2580, "word_recall": 0.7660},
+                "tetrak-hy-v1": {"char_similarity": 0.1004, "word_recall": 0.5014},
+                "tetrak-hy-v0": {"char_similarity": 0.0745, "word_recall": 0.2742},
+                "easyocr-stock": {"char_similarity": 0.0348, "word_recall": 0.0314},
+            },
+            "note": (
+                "word_recall_with_fold applies tetrak_hy.fold_script from the "
+                "tetrak-easyocr-armenian package, which folds cross-script "
+                "homoglyphs (Latin h for հ, colon for ։) onto their Armenian "
+                "forms in already-recognised text. That is the figure the "
+                "shipped pipeline earns, and at 0.6919 it is the first of "
+                "these models to pass tesseract-hye's 0.6621 word recall. The "
+                "raw 0.6073 is the model alone. char_similarity remains "
+                "dominated by reading order rather than recognition, for the "
+                "reason recorded against v1."
             ),
         },
     },
@@ -198,7 +281,7 @@ def provenance(bundle: Path, version: str, dataset_revision: str | None) -> dict
         ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=False
     ).stdout.strip()
     facts = facts_for(version)
-    return {
+    record = {
         "model": "tetrak_hy",
         "version": version,
         "architecture": "EasyOCR generation2 (VGG + 2x BiLSTM + CTC)",
@@ -210,10 +293,18 @@ def provenance(bundle: Path, version: str, dataset_revision: str | None) -> dict
             "repo": DATASET_ID,
             "config": facts["dataset_config"],
             "revision": dataset_revision,
+            **({"note": facts["dataset_note"]} if "dataset_note" in facts else {}),
         },
         "trainer_commit_at_upload": commit or None,
         "sha256": {name: sha256(bundle / name) for name in BUNDLE_FILES},
     }
+    # Optional, and carried into the published record when present: a
+    # defect found after a version shipped belongs beside its numbers,
+    # not only in a commit message nobody downloading weights will read.
+    for key in ("charset", "known_defects"):
+        if key in facts:
+            record[key] = facts[key]
+    return record
 
 
 def main() -> int:
