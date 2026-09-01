@@ -1,6 +1,6 @@
 # Automated release — the workspace pattern, ported from Tetrak.
 #
-# On every push/merge to main, tools/next_version.py computes the next
+# On every push/merge to main, the shared next-version action computes the next
 # semantic version from the Conventional Commit history since the last tag,
 # git-cliff prepends that version's section to CHANGELOG.md, the commit is
 # tagged, and a GitHub Release is published whose notes are that section.
@@ -43,13 +43,19 @@ jobs:
         with:
           tool: git-cliff
 
+      # Shared with every other repository whose releases are automated. It
+      # was byte-identical in three of them and nothing detected drift, so it
+      # now lives once in scattercode/release-pipelines with its tests.
+      #
       # Deliberately not `git cliff --bumped-version`: that buckets the whole
       # history into releases first and goes wrong on merge topology — Tetrak
-      # had a `feat!` silently skipped by it. tools/next_version.py reads one
-      # commit range instead and is covered by tests/test_next_version.py.
+      # had a `feat!` silently skipped by it. The action reads one commit
+      # range instead.
+      #
+      # Pinned to the major tag, never main.
       - name: Compute next version
         id: version
-        run: python3 tools/next_version.py --github --explain
+        uses: scattercode/release-pipelines/actions/next-version@v1
 
       - name: Guard against a silently skipped release
         if: steps.version.outputs.release != 'true'

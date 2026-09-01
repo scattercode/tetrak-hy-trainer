@@ -138,8 +138,8 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
 
 pytest                 # fast, no OCR stack or GPU needed
-ruff check src tests tools scripts
-ruff format src tests tools scripts
+ruff check src tests scripts
+ruff format src tests scripts
 uv lock --check        # the lockfile matches pyproject.toml
 ```
 
@@ -202,10 +202,14 @@ regenerating just because the machine changed.
 Releases are automated, the same arrangement as Tetrak — do not perform
 them by hand.
 
-- Every push to `main` runs `release.yml`: `tools/next_version.py` computes
-  the next semantic version from the Conventional Commit history (covered
-  by `tests/test_next_version.py`), git-cliff prepends the new section to
-  `CHANGELOG.md`, and the workflow tags and publishes a GitHub Release.
+- Every push to `main` runs `release.yml`: the shared `next-version` action
+  (`scattercode/release-pipelines`, pinned to `@v1`) computes the next
+  semantic version from the Conventional Commit history, git-cliff prepends
+  the new section to `CHANGELOG.md`, and the workflow tags and publishes a
+  GitHub Release. The computation and its tests live in that repository
+  because they were byte-identical in three of ours and nothing detected
+  drift; `cliff.toml` and `.githooks/commit-msg` are copies from the same
+  place, checked by `sync.sh --check`.
 - Never edit `CHANGELOG.md` by hand — change the commit messages or the
   `commit_parsers` in `cliff.toml` instead.
 - Never create tags or Releases manually. Trained weights are *attached* to

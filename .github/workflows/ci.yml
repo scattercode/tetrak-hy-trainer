@@ -37,8 +37,8 @@ jobs:
 
       - name: Lint
         run: |
-          ruff check src tests tools scripts
-          ruff format --check src tests tools scripts
+          ruff check src tests scripts
+          ruff format --check src tests scripts
 
       - name: Test
         run: pytest
@@ -83,3 +83,26 @@ jobs:
           name: sbom-source-tree
           path: sbom.cdx.json
           retention-days: 90
+
+  # cliff.toml and .githooks/commit-msg are copies of the shared templates in
+  # scattercode/release-pipelines. They have to be real files here -- git-cliff
+  # reads one from the repository root and git runs the other from the checkout
+  # -- so they cannot be referenced remotely the way the next-version action
+  # is. This is what stops a copy drifting unnoticed, which is the failure that
+  # motivated sharing them: thirteen repositories carried them and nothing
+  # compared any two.
+  templates:
+    name: Shared templates are current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check out the shared templates
+        uses: actions/checkout@v7
+        with:
+          repository: scattercode/release-pipelines
+          ref: v1
+          path: .release-pipelines
+
+      - name: Compare
+        run: ./.release-pipelines/sync.sh --check .
