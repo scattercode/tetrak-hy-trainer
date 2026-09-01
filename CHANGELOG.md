@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-09-01
+
+### Added
+
+- Add hye-calfa-n to v3's baselines and drop the "highest" claim
+- Add the census and chr-decomposition scripts (brief 012 stage 0)
+
+### Changed
+
+- Harvest crops from several volumes in one run
+- Make the model upload v3-aware
+- Per-work held-out registry, and a charset diff for new sources
+- Fetch script for the rendering faces, licences verified per file
+- Write down the held-out split, the interpreters and the run layout
+- Take the version computation from the shared release pipeline
+- Charset v3 and transcript normalisation, from the corpus-wide diff
+- Retire the handoff, keeping the lessons that outlive it
+
+### Fixed
+
+- Retry transient failures in the Wikisource client
+- Stop the public scripts importing the private Tetrak package
+
 ## [0.3.0] - 2026-09-01
 
 ### Added
