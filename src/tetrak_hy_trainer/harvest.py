@@ -36,6 +36,10 @@ from tetrak_hy_trainer import wikisource
 from tetrak_hy_trainer.wikisource import QUALITY_PROOFREAD, WikisourceClient
 
 
+class HarvestError(RuntimeError):
+    """Raised when a harvest would write something untrue to disk."""
+
+
 def parse_page_spec(spec: str) -> set[int]:
     """Parse ``"20-80,100,140-150"`` into the set of page numbers it names.
 
@@ -137,7 +141,18 @@ def harvest(
         harvested += 1
         print(f"  [{harvested}] p{record.page_number} q{record.quality} {text_path.name}")
 
-    manifest = _merged_with_existing(out_dir / "manifest.json", manifest)
+    manifest_path = out_dir / "manifest.json"
+    _assert_same_work(manifest_path, index_title)
+    if not manifest:
+        raise HarvestError(
+            f"{index_title!r} yielded no pages at quality >= {min_quality}"
+            + (f" among pages {sorted(pages)[:5]}..." if pages else "")
+            + ". A title the API does not know is not an error to it -- it simply has "
+            "no pages -- so this would otherwise report success, write nothing, and "
+            "stamp the manifest with an index that does not exist. Check the title "
+            "against the wiki, or widen --pages / --min-quality."
+        )
+    manifest = _merged_with_existing(manifest_path, manifest)
     (out_dir / "manifest.json").write_text(
         json.dumps(
             {
@@ -151,6 +166,41 @@ def harvest(
         encoding="utf-8",
     )
     return manifest
+
+
+def _assert_same_work(manifest_path: Path, index_title: str) -> None:
+    """Refuse to restamp an existing harvest with a different index title.
+
+    The manifest's ``index`` is what every downstream guard keys on --
+    :mod:`tetrak_hy_trainer.heldout` decides from it whether a page is
+    evaluation material, and the weights release cites it as provenance.
+    The pages themselves survive a re-run, because
+    :func:`_merged_with_existing` keeps them, so a mistyped title does not
+    lose data: it silently relabels correct data as having come from
+    somewhere else, which is worse, because nothing looks wrong
+    afterwards.
+
+    This is not hypothetical. Topping up Baronian's scans with the title
+    retyped from memory rather than read from the manifest wrote a
+    non-existent index over 739 correctly harvested pages, and reported
+    "Harvested 739 page(s)" while doing it.
+
+    Raises:
+        HarvestError: The directory already holds a different work.
+    """
+    if not manifest_path.exists():
+        return
+    previous = json.loads(manifest_path.read_text(encoding="utf-8")).get("index")
+    if previous and previous != index_title:
+        raise HarvestError(
+            f"{manifest_path} already records a different work:\n"
+            f"  existing: {previous!r}\n"
+            f"  supplied: {index_title!r}\n"
+            "The manifest's index is the provenance every held-out check and the "
+            "weights release read, so it is not overwritten. If the title is a "
+            "typo, read it from the manifest rather than retyping it; if this "
+            "really is a different work, harvest it into its own directory."
+        )
 
 
 def _merged_with_existing(manifest_path: Path, entries: list[dict]) -> list[dict]:

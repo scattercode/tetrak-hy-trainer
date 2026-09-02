@@ -353,3 +353,92 @@ class TestNormaliseTranscript:
 
     def test_clean_wikitext_applies_it(self) -> None:
         assert "«Ազգ»" in wikisource.clean_wikitext("<Ազգ>")
+
+
+class TestHarvestProvenanceGuards:
+    """A harvest may lose time; it may not write something untrue.
+
+    Both guards here come from the same incident. Topping up Baronian's
+    scans with the index title retyped from memory rather than read from
+    the manifest wrote a title the wiki does not know over 739 correctly
+    harvested pages -- and printed "Harvested 739 page(s)" while doing
+    it. The pages survived, because a re-run merges rather than replaces;
+    what was destroyed was the record of where they came from, which is
+    what heldout keys on and what the weights release cites.
+    """
+
+    def test_a_title_matching_nothing_is_an_error_not_a_success(self, tmp_path) -> None:
+        """An unknown index is not an API error -- it simply has no pages.
+
+        So the harvest completes, writes a manifest naming an index that
+        does not exist, and reports success.
+        """
+        from tetrak_hy_trainer.harvest import HarvestError, harvest
+
+        session = FakeSession([_pages_payload({})])
+        client = WikisourceClient(session=session, pause=0)
+
+        with pytest.raises(HarvestError, match="no pages"):
+            harvest(client, "Ինդեքս:Mistyped.djvu", tmp_path)
+
+        assert not (tmp_path / "manifest.json").exists()
+
+    def test_an_existing_harvest_is_not_restamped_with_another_title(self, tmp_path) -> None:
+        """The pages are kept by the merge; the provenance would not be."""
+        from tetrak_hy_trainer.harvest import HarvestError, harvest
+
+        (tmp_path / "text").mkdir()
+        (tmp_path / "text" / "5.txt").write_text("արդեն կա", encoding="utf-8")
+        (tmp_path / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "index": "Ինդեքս:Real title.djvu",
+                    "min_quality": 3,
+                    "pages": [{"page_number": 5, "text": "text/5.txt", "revid": 111}],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        session = FakeSession(
+            [
+                _pages_payload(
+                    {"1": {"pageid": 10, "title": "Էջ:Vol.djvu/5", "proofread": {"quality": 4}}}
+                )
+            ]
+        )
+
+        with pytest.raises(HarvestError, match="different work"):
+            harvest(WikisourceClient(session=session, pause=0), "Ինդեքս:Typo.djvu", tmp_path)
+
+        saved = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+        assert saved["index"] == "Ինդեքս:Real title.djvu"
+        assert saved["pages"][0]["revid"] == 111
+
+    def test_the_same_title_still_tops_up(self, tmp_path) -> None:
+        """The guard must not block the ordinary --images top-up."""
+        from tetrak_hy_trainer.harvest import harvest
+
+        (tmp_path / "text").mkdir()
+        (tmp_path / "text" / "5.txt").write_text("արդեն կա", encoding="utf-8")
+        (tmp_path / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "index": "Ինդեքս:Vol.djvu",
+                    "min_quality": 3,
+                    "pages": [{"page_number": 5, "text": "text/5.txt", "revid": 111}],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        session = FakeSession(
+            [
+                _pages_payload(
+                    {"1": {"pageid": 10, "title": "Էջ:Vol.djvu/5", "proofread": {"quality": 4}}}
+                )
+            ]
+        )
+        manifest = harvest(WikisourceClient(session=session, pause=0), "Ինդեքս:Vol.djvu", tmp_path)
+
+        assert [entry["page_number"] for entry in manifest] == [5]
