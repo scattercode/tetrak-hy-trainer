@@ -203,37 +203,25 @@ def evaluate_pages(bundle: Path, eval_dir: Path) -> None:
 
     Same loading and line-joining as Tetrak's easyocr backend, same
     metrics as the Armenian benchmarks note, so the number is comparable
-    the moment it prints.
+    the moment it prints. The measurement itself lives in
+    :mod:`tetrak_hy_trainer.evaluate`, shared with the per-register
+    evaluation, so the two cannot drift apart; this only prints it.
     """
-    import json
+    from tetrak_hy_trainer import evaluate
 
-    import easyocr
-
-    from tetrak_hy_trainer.accuracy import character_similarity, word_recall
-
-    reader = easyocr.Reader(
-        ["en"],  # no hy_char.txt ships with EasyOCR; inert for custom models
-        recog_network=packaging.NETWORK_NAME,
-        user_network_directory=str(bundle),
-        model_storage_directory=str(bundle),
-        verbose=False,
+    result = evaluate.score_pages(
+        bundle,
+        eval_dir,
+        on_page=lambda page: print(
+            f"EVAL p{page.page_number} chr={page.character_similarity:.3f} "
+            f"wrd={page.word_recall:.3f}",
+            flush=True,
+        ),
     )
-    manifest = json.loads((eval_dir / "manifest.json").read_text(encoding="utf-8"))
-    sims, recs = [], []
-    for entry in manifest["pages"]:
-        image = eval_dir / "images" / f"{entry['page_number']}.jpg"
-        if not image.exists():
-            continue
-        expected = (eval_dir / entry["text"]).read_text(encoding="utf-8")
-        text = "\n".join(reader.readtext(str(image), detail=0, paragraph=False))
-        sim, rec = character_similarity(text, expected), word_recall(text, expected)
-        sims.append(sim)
-        recs.append(rec)
-        print(f"EVAL p{entry['page_number']} chr={sim:.3f} wrd={rec:.3f}", flush=True)
-    if sims:
+    if len(result):
         print(
-            f"EVAL AVERAGE chr={sum(sims) / len(sims):.4f} wrd={sum(recs) / len(recs):.4f} "
-            f"n={len(sims)}",
+            f"EVAL AVERAGE chr={result.mean_character_similarity:.4f} "
+            f"wrd={result.mean_word_recall:.4f} n={len(result)}",
             flush=True,
         )
 
