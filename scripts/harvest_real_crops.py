@@ -54,10 +54,12 @@ convenient one::
         --harvest-dir runs/v1/harvest-vol5 runs/v1/harvest-vol6 \\
         --bundle runs/v2/bundle --out runs/v2/all_data
 
-Pass every volume in **one** run. A second run into the same ``--out``
-truncates the first's ``labels.csv``, and page numbers repeat between
-volumes; crops are named ``v<volume>_<page>_<n>.png`` so they cannot
-collide.
+Pass every source in **one** run. A second run into the same ``--out``
+truncates the first's ``labels.csv``. Page numbers repeat between
+sources, so crops are named ``<harvest-dir>_<page>_<n>.png`` -- for the
+directory, not the volume number, because eight of brief 012's works
+have no volume number and would otherwise all be ``v0``. See
+:func:`load_pages`.
 
 Writing into the v2 run's ``all_data/`` puts ``real_train`` beside
 ``syn_train``, which is what lets ``finetune_real.py`` mix the two in one
@@ -73,6 +75,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import statistics
 import sys
 import time
@@ -108,18 +111,51 @@ _TRAILING_DASHES = "-–—֊"
 _STRAY_QUOTES = "\"'«»"
 
 
+def source_slug(harvest_dir: Path) -> str:
+    """A filename-safe identifier for one harvest directory.
+
+    Crops are named for their source, so this has to be unique across the
+    run and safe to put in ``labels.csv``, which the vendored trainer
+    parses by splitting on the first comma.
+    """
+    return re.sub(r"[^A-Za-z0-9]+", "-", harvest_dir.name).strip("-")
+
+
 def load_pages(harvest_dirs: list[Path]) -> tuple[list[str], list[dict]]:
     """Every page across *harvest_dirs* that has both a scan and a transcript.
 
     Several volumes in one run, rather than one run per volume, because
     the output is a single dataset: a second run writing into the same
-    ``--out`` truncates the first's ``labels.csv``, and crop filenames
-    drawn from page numbers alone would collide between volumes anyway.
-    Each page therefore carries the volume it came from, and the crops
-    are named for it.
+    ``--out`` truncates the first's ``labels.csv``.
+
+    Crop filenames drawn from page numbers alone would collide between
+    sources, so each page carries an identifier its crops are named for.
+    That identifier is the **harvest directory**, not the volume number.
+    Volume was enough while every source was a numbered ASE volume; brief
+    012 added eight works that have no volume number at all, so
+    ``heldout.volume_of`` returns None for each and every one of them
+    named its crops ``v0_<page>_<index>.png``. Baronian page 100, Faustus
+    page 100 and Otyan page 100 then wrote the same file.
+
+    That is not a cosmetic clash. The image is overwritten by whichever
+    source is cut last, while every source still appends its own row to
+    ``labels.csv`` -- so one image ends up carrying two or three
+    contradictory labels, and the only way a CTC model can reduce loss
+    across them is to emit something short and noncommittal. It cost the
+    first v5 fine-tune 27% of its 56,608 crops.
     """
     index_titles: list[str] = []
     pages: list[dict] = []
+
+    slugs = [source_slug(directory) for directory in harvest_dirs]
+    duplicates = {slug for slug in slugs if slugs.count(slug) > 1}
+    if duplicates:
+        raise ValueError(
+            f"harvest directories collapse to the same crop-name prefix: {sorted(duplicates)}. "
+            "Crops are named for their source directory, so two directories sharing a name "
+            "would overwrite each other's crops and give one image several labels. "
+            "Rename one, or pass them in separate runs with separate --out."
+        )
 
     for harvest_dir in harvest_dirs:
         manifest_path = harvest_dir / "manifest.json"
@@ -141,9 +177,18 @@ def load_pages(harvest_dirs: list[Path]) -> tuple[list[str], list[dict]]:
             image = harvest_dir / "images" / f"{entry['page_number']}.jpg"
             text = harvest_dir / entry["text"]
             if image.exists() and text.exists():
-                pages.append({**entry, "image_path": image, "text_path": text, "volume": volume})
+                pages.append(
+                    {
+                        **entry,
+                        "image_path": image,
+                        "text_path": text,
+                        "volume": volume,
+                        "source": source_slug(harvest_dir),
+                        "index": index_title,
+                    }
+                )
 
-    pages.sort(key=lambda page: (page["volume"] or 0, page["page_number"]))
+    pages.sort(key=lambda page: (page["source"], page["page_number"]))
     return index_titles, pages
 
 
@@ -340,13 +385,15 @@ def main() -> int:
                 continue
             if not usable(crop, allowed, args.max_label_length, median_height):
                 continue
-            filename = f"v{page['volume'] or 0}_{page['page_number']:04d}_{index:04d}.png"
+            filename = f"{page['source']}_{page['page_number']:04d}_{index:04d}.png"
             cut(image, crop.bbox, args.margin_fraction).save(folders[split] / filename)
             rows[split].append((filename, crop.label))
             totals[crop.tier] += 1
             kept += 1
             review.append(
                 {
+                    "source": page["source"],
+                    "index": page["index"],
                     "volume": page["volume"],
                     "page": page["page_number"],
                     "split": split,
@@ -362,7 +409,7 @@ def main() -> int:
 
         counts = align.tier_counts(crops)
         print(
-            f"  vol{page['volume']} p{page['page_number']} [{split}] "
+            f"  {page['source']} p{page['page_number']} [{split}] "
             f"{len(detections)} boxes -> "
             f"{kept} crops (exact {counts[Tier.EXACT]}, near {counts[Tier.NEAR]}, "
             f"bracketed {counts[Tier.BRACKETED]})",
@@ -379,6 +426,8 @@ def main() -> int:
         writer = csv.DictWriter(
             handle,
             fieldnames=[
+                "source",
+                "index",
                 "volume",
                 "page",
                 "split",
@@ -397,10 +446,8 @@ def main() -> int:
         "indexes": index_titles,
         "harvest_dirs": [str(d) for d in args.harvest_dir],
         "bundle": str(args.bundle),
-        "pages": [f"vol{page['volume']}/{page['page_number']}" for page in pages],
-        "revids": {
-            f"vol{page['volume']}/{page['page_number']}": page.get("revid") for page in pages
-        },
+        "pages": [f"{page['source']}/{page['page_number']}" for page in pages],
+        "revids": {f"{page['source']}/{page['page_number']}": page.get("revid") for page in pages},
         "settings": {
             "min_similarity": args.min_similarity,
             "bracket_span": args.bracket_span,
