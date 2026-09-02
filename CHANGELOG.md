@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-09-02
+
+### Changed
+
+- Run the pre-push suite through the project's own interpreter
+- Build a per-register evaluation set for every held-out work (#6)
+- Score every register, not just the encyclopedia (#7)
+
 ## [0.4.0] - 2026-09-01
 
 ### Added
