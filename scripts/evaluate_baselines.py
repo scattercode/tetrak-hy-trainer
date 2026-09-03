@@ -67,6 +67,23 @@ def tesseract_hye_auto(path):
     return ocr_image(path, lang="hye", auto=True)
 
 
+def hye_calfa_n(path):
+    """Calfa's Armenian Tesseract model (CC BY-NC 4.0 -- measure, never ship).
+
+    A first-class row rather than an environment trick. It was previously
+    run by pointing TESSDATA_PREFIX at a directory holding
+    hye-calfa-n.traineddata and passing lang="hye", which only works if
+    the file is renamed, and leaves no record in the table of which model
+    a "tesseract-hye" row actually used. Brief 012 requires this bar on
+    every set published, so it needs a name of its own.
+
+    Set TESSDATA_PREFIX to the directory holding hye-calfa-n.traineddata.
+    """
+    from tetrak_ocr.backends.tesseract import ocr_image
+
+    return ocr_image(path, lang="hye-calfa-n")
+
+
 def vision(path):
     from tetrak_ocr.backends.vision import ocr_image
 
@@ -149,6 +166,7 @@ BACKENDS = [
     ("tesseract-eng", tesseract_eng),
     ("tesseract-hye", tesseract_hye),
     ("tesseract-hye-auto", tesseract_hye_auto),
+    ("hye-calfa-n", hye_calfa_n),
     ("vision", vision),
     ("easyocr", easyocr_stock),
     ("paddle", paddle),
