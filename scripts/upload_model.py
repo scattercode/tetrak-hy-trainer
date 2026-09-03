@@ -290,6 +290,132 @@ VERSIONS = {
             ),
         },
     },
+    "v5": {
+        # runs/v4/train.log (pre-train) + runs/v6/train.log (fine-tune).
+        # Two internal run numbers stand behind this one tag: the v4
+        # pre-train was never published on its own, and the first
+        # fine-tune attempt (internal v5, archived as
+        # runs/v5-invalid-collided-crops) was discarded because a crop
+        # filename collision gave 27% of its training images two or three
+        # contradictory labels -- fixed in #9. The shipped weights are
+        # internal run v6; the published sequence stays unbroken.
+        "recipe": (
+            "scripts/train_synthetic.py --iters 150000 --max-samples 120000 "
+            "over 19 harvest dirs and 15 font faces (the unpublished v4 "
+            "pre-train), then scripts/finetune_real.py --iters 12000 "
+            "--batch-ratio 0.5-0.5 on real crops from 12 sources"
+        ),
+        "dataset_config": None,
+        "dataset_note": (
+            "pre-trained on 351,000 synthetic line crops rendered from "
+            "~7,400 proofread Wikisource pages across the ASE (volumes 1, "
+            "3-13), Western Armenian literature (Otyan, Totovents, "
+            "Baronian), Tumanyan's collected works, Faustus of Byzantium "
+            "1968, a popular medical encyclopedia and an Armenian-English "
+            "dictionary; then fine-tuned on 51,078 real crops cut from 520 "
+            "of those scans by detection-assisted alignment, mixed 50/50 "
+            "in each batch with the synthetic set. Held-out material "
+            "(ASE volume 2 whole, plus registered pages of each work -- "
+            "tetrak_hy_trainer.heldout) is excluded from both stages"
+        ),
+        "charset": {
+            "num_class": 175,
+            "added": [
+                "U+2026 HORIZONTAL ELLIPSIS",
+                "U+005B/U+005D SQUARE BRACKETS",
+                "U+2116 NUMERO SIGN",
+                "U+00B2 SUPERSCRIPT TWO",
+            ],
+            "note": (
+                "a charset change is a new model version by construction: CTC "
+                "class indices are positional, so v5 weights cannot be loaded "
+                "under v3's yaml or the reverse"
+            ),
+        },
+        "synthetic_validation": {
+            "word_accuracy": 95.2,
+            "norm_edit_distance": 0.9949,
+            "note": (
+                "the pre-train's figure, on degraded crops drawn from 3.6x "
+                "v2's vocabulary and 15 faces rather than 3 -- lower than "
+                "v2's 99.3% because the validation set got harder, not the "
+                "model worse"
+            ),
+        },
+        "real_crop_validation": {
+            "word_accuracy": 94.177,
+            "norm_edit_distance": 0.9923,
+            "note": (
+                "5,530 crops from pages held out of the fine-tune, split by "
+                "page, spanning all 12 sources. Accuracy climbed steadily "
+                "from 89.4% at iteration 500 to 94.2% at 11,500 with "
+                "validation loss flat from 8,500 on -- none of the "
+                "overfitting that capped v3, because 51,078 real crops "
+                "absorb 3.8 passes where v3's 6,097 could not"
+            ),
+        },
+        "real_scan_evaluation": {
+            "char_similarity": 0.1634,
+            "word_recall": 0.8244,
+            "word_recall_with_fold": 0.8295,
+            "pages": 10,
+            "source": REAL_EVAL_SOURCE,
+            "metric": REAL_EVAL_METRIC,
+            "baselines": {
+                "hye-calfa-n": {
+                    "char_similarity": 0.8403,
+                    "word_recall": 0.7889,
+                    "note": (
+                        "Calfa's Tesseract model, CC BY-NC 4.0 -- measured "
+                        "2026-09-01 on the same pages"
+                    ),
+                },
+                "hye-paddle": {"char_similarity": 0.1627, "word_recall": 0.8073},
+                "marker": {"char_similarity": 0.2580, "word_recall": 0.7660},
+                "tesseract-hye": {"char_similarity": 0.6968, "word_recall": 0.6621},
+                "tetrak-hy-v3": {"char_similarity": 0.1470, "word_recall": 0.7356},
+                "tetrak-hy-v2": {"char_similarity": 0.1166, "word_recall": 0.6073},
+            },
+            "note": (
+                "at 0.8244 raw this is the first of these models to lead "
+                "every measured engine on word recall -- hye-paddle's 0.8073 "
+                "and hye-calfa-n's 0.7889 included -- and the fold now adds "
+                "only 0.005, because the model emits Armenian forms directly "
+                "rather than Latin homoglyphs for the fold to repair. "
+                "char_similarity remains dominated by reading order on these "
+                "two-column pages, for the reason recorded against v1: "
+                "hye-calfa-n's 0.84 reflects its layout analysis, not a "
+                "recognition gap"
+            ),
+        },
+        "per_register_evaluation": {
+            "metric": "mean word recall (fold applied) over per-work held-out pages",
+            "source": (
+                "runs/eval/<work>/ built by scripts/build_eval_sets.py; "
+                "scored by scripts/evaluate_registers.py"
+            ),
+            "registers": {
+                "ase-vol2": 0.8295,
+                "baronian-vol10": 0.8775,
+                "dictionary-hy-en": 0.6009,
+                "faustus-1968": 0.8215,
+                "medical-encyclopedia": 0.7743,
+                "otyan-works": 0.9003,
+                "totovents-works": 0.9141,
+                "tumanyan-elzh5": 0.8639,
+            },
+            "mean_over_registers": 0.8228,
+            "note": (
+                "v3 scored 0.4043 on this instrument and collapsed to "
+                "0.23-0.33 on the Western Armenian literary sources; v5 "
+                "holds 0.60-0.91 everywhere. Character similarity still "
+                "splits by layout, not recognition -- 0.56-0.72 on "
+                "single-column literary pages against 0.08-0.16 on "
+                "multi-column encyclopedias -- so column-aware reading "
+                "order is the remaining bottleneck (brief 012)"
+            ),
+        },
+    },
 }
 
 
