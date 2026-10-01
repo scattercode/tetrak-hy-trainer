@@ -38,10 +38,28 @@ from __future__ import annotations
 import difflib
 import re
 
+# Armenian punctuation -> the ASCII character it is visually identical to.
+_PUNCTUATION_HOMOGLYPHS = str.maketrans({"։": ":", "․": "."})
+
+
+def _is_word(token: str) -> bool:
+    """A token with at least one letter or digit; ``-`` or ``…`` alone is not."""
+    return any(character.isalnum() for character in token)
+
 
 def normalise(text: str) -> str:
-    """Lowercase and collapse all whitespace to a single space."""
-    return re.sub(r"\s+", " ", text.lower()).strip()
+    """Lowercase, equate Armenian punctuation homoglyphs, collapse whitespace.
+
+    Two Armenian marks are scored as the ASCII character they print
+    identically to: the full stop ``։`` as the colon, and the abbreviation
+    dot ``․`` (U+2024) as the full stop. Transcribers type the ASCII form
+    so often (the medical encyclopedia's transcripts use the colon
+    throughout; every register uses ``.`` for ``․``) that holding an engine
+    to either form would rank engines on which habit their output happens
+    to share with the transcript, not on what they read. Mapped towards
+    ASCII so that text with no Armenian in it is unaffected.
+    """
+    return re.sub(r"\s+", " ", text.lower().translate(_PUNCTUATION_HOMOGLYPHS)).strip()
 
 
 def character_similarity(actual: str, expected: str) -> float:
@@ -54,8 +72,15 @@ def character_similarity(actual: str, expected: str) -> float:
     Returns:
         A float in [0.0, 1.0]. 1.0 means the texts are identical after
         normalisation.
+
+    ``autojunk`` is off, as in Tetrak's copy (brief 013): with difflib's
+    default, a page-length string has its common characters treated as
+    junk and the ratio stops measuring how much of the text was read.
+    ``align`` and ``confusion`` already turned it off for the same reason.
     """
-    return difflib.SequenceMatcher(None, normalise(actual), normalise(expected)).ratio()
+    return difflib.SequenceMatcher(
+        None, normalise(actual), normalise(expected), autojunk=False
+    ).ratio()
 
 
 def word_recall(actual: str, expected: str) -> float:
@@ -68,7 +93,11 @@ def word_recall(actual: str, expected: str) -> float:
     Returns:
         A float in [0.0, 1.0]. 1.0 means every expected word was found.
     """
-    expected_words = normalise(expected).split()
+    # Punctuation-only tokens are not words. The medical encyclopedia's
+    # index prints dot leaders that its transcripts type as a standalone
+    # "-", and counting those charged every engine that read the page
+    # correctly with a missed word per index entry (brief 013).
+    expected_words = [word for word in normalise(expected).split() if _is_word(word)]
     if not expected_words:
         return 1.0
     actual_words = set(normalise(actual).split())

@@ -62,3 +62,16 @@ class TestWordRecall:
 
     def test_an_empty_transcript_recalls_nothing(self):
         assert word_recall("", ARMENIAN) == 0.0
+
+
+class TestArmenianTranscriptConventions:
+    """Kept in step with Tetrak's copy of the metric (brief 013)."""
+
+    def test_full_stop_and_colon_are_equal(self):
+        assert normalise("բժշկի։") == normalise("բժշկի:")
+
+    def test_abbreviation_dot_and_full_stop_are_equal(self):
+        assert normalise("Ա․ Գրկ․") == normalise("Ա. Գրկ.")
+
+    def test_punctuation_only_tokens_are_not_words(self):
+        assert word_recall("term 274 other 275", "term - 274 other - 275") == 1.0

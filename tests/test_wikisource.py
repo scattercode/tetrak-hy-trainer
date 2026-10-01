@@ -340,9 +340,18 @@ class TestNormaliseTranscript:
     def test_a_byte_order_mark_is_stripped(self) -> None:
         assert wikisource.normalise_transcript("﻿մոտենում") == "մոտենում"
 
+    def test_ascii_colon_in_armenian_becomes_a_full_stop(self) -> None:
+        """Transcribers type ':' for '։'; the label should say what the page prints."""
+        assert wikisource.normalise_transcript("բժշկի: Հ.:") == "բժշկի։ Հ.։"
+
+    def test_colon_outside_armenian_tokens_is_left_alone(self) -> None:
+        """A time, a ratio or a Latin gloss prints a genuine colon."""
+        text = "10:30 1:2 Note: բժշկի ։"
+        assert wikisource.normalise_transcript(text) == text
+
     def test_it_is_idempotent(self) -> None:
         """Applied by clean_wikitext and again at read time, so it must be."""
-        once = wikisource.normalise_transcript("<Ա> − բ")
+        once = wikisource.normalise_transcript("<Ա> − բ: 10:30")
         assert wikisource.normalise_transcript(once) == once
 
     def test_genuine_print_is_untouched(self) -> None:
