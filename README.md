@@ -56,32 +56,32 @@ producing that PR.
 
 ## Status
 
-Trained, released and measured. The current model is **v5** (September
-2026), shipped as
+Trained, released and measured. The current model is **v6** (October
+2026), shipped with its word list in
 [tetrak-easyocr-armenian](https://github.com/scattercode/tetrak-easyocr-armenian)
-0.7.0 and consumed by Tetrak as its `easyocr-hy` backend.
+and consumed by Tetrak as its `easyocr-hy` backend.
 
-What v5 is: a CTC recogniser pre-trained on synthetic line crops rendered
-from 3.26 million tokens of proofread Armenian Wikisource text across
-fourteen sources — Eastern and Western Armenian, reformed and classical
-orthography — in fourteen faces with archival degradations, then fine-tuned
-on real crops cut from the same works' scans. Its charset admits 174
-characters plus the CTC blank.
+What v6 is: v5, a CTC recogniser pre-trained on synthetic line crops in
+fifteen faces from proofread Armenian Wikisource text, fine-tuned again on
+99,521 real crops cut from the scans of sixteen works. Its charset admits
+174 characters plus the CTC blank, unchanged since v5.
 
 How it reads, on pages held out from training: over eight evaluation
 registers (ten pages each from seven works plus volume 2 of the Armenian
-Soviet Encyclopedia — 65 pages in all, chosen before anything trained on
-those works) v5 has the highest mean word recall of any engine we have
-measured, 0.836, ahead of marker (0.786), Calfa's `hye-calfa-n` Tesseract
-model (0.781) and stock `tesseract -l hye` (0.637). It does not lead
-every register — Calfa's model reads three of the scholarly editions
-better and marker both multi-column encyclopedias — and on
-character similarity Calfa leads seven registers of eight. The per-register
-tables, and what they changed in our understanding of the gap, are in
-[the comparison article on tetrak.dev](https://tetrak.dev/articles/2026/09/the-comparison-we-had-been-putting-off/).
-Those figures are for Tetrak's full pipeline (v5 plus homoglyph folding,
-recursive XY-cut layout and de-hyphenation); the raw recogniser's numbers
-are in each release's provenance record.
+Soviet Encyclopedia), Tetrak's pipeline built on v6 leads every engine we
+have measured on both mean word recall and mean character similarity, and
+leads both metrics on five of the eight registers. It still trails on
+Faustus of Byzantium's bold-italic back matter, on Tumanyan's Russian
+apparatus (the charset has no Cyrillic) and on the medical encyclopedia's
+index dashes, which EasyOCR's detector never boxes. The live tables are on
+[tetrak.dev](https://tetrak.dev/articles/2026/10/beating-the-baselines/),
+read from the comparison CSV rather than copied here. The raw recogniser's
+figures are in each release's provenance record.
+
+Figures published for v5 and earlier used a metric that brief 013 found
+to be wrong: difflib's `autojunk`, which on a page of text ignores most of
+the alphabet, and transcription conventions scored as errors. They are not
+comparable with v6's.
 
 The pipeline stages, all in use:
 
@@ -97,14 +97,15 @@ The pipeline stages, all in use:
 4. **Training** — CTC pre-training on synthetic crops, then fine-tuning on
    real crops aligned from detector boxes to transcripts.
 5. **Evaluation** — every register scored on every run, and the external
-   engines run on the same pages.
+   engines run on the same pages, with their raw readings saved so a metric
+   change is a re-score (`scripts/rescore_baselines.py`).
 6. **Packaging and release** — the three-file bundle, the provenance
    record, and the upload to Hugging Face that a weights pull request to
    the library then pins.
 
-Next: the recognition-sharpness gap to Calfa's model on single-column
-literary registers, per-register confusion tables to locate it, and
-`hye-paddle` run on the seven newer registers.
+Next: real crops from bold-italic index pages for the Faustus back matter,
+and Cyrillic and classical orthography, which are a new charset and so a
+new model.
 
 ## Data and font licences
 
