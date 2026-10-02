@@ -71,6 +71,28 @@ REAL_EVAL_SOURCE = (
 )
 REAL_EVAL_METRIC = "tetrak_hy_trainer.accuracy; higher is better for both figures"
 
+# Brief 013 corrected the metric itself. Figures recorded for v0-v5 used
+# difflib with autojunk on, which on a page-length string treats most of
+# the alphabet as junk, and counted the ASCII colon, the abbreviation dot
+# and punctuation-only tokens against engines for what were transcription
+# conventions. v6's figures, and the re-measured v5 figures beside them,
+# use the corrected metric; the two sets are not comparable.
+REAL_EVAL_METRIC_V6 = (
+    "tetrak_hy_trainer.accuracy after brief 013: difflib autojunk off; "
+    "։ scored as : and ․ as .; punctuation-only tokens not counted as words"
+)
+
+# The word list tetrak_hy.lexicon decodes with, published beside the
+# weights from v6 on. Its attribution travels with it.
+WORDLIST_NAME = "wordlist.tsv.gz"
+WORDLIST_ATTRIBUTION = (
+    "Word counts from proofread Armenian Wikisource transcripts (CC BY-SA "
+    "3.0), evaluation pages and pages printing their text excluded; with "
+    "every word form of the Nayiri Armenian Lexicon 2026-04-25-v3 (c) "
+    "Serouj Ourishian, CC BY 4.0, added at the minimum count. Built by "
+    "scripts/build_wordlist.py."
+)
+
 # Every face the renderer actually used, from the `fonts:` line both runs
 # logged. Mshtakan ships with macOS; no font file is redistributed.
 FONTS = ["NotoSansArmenian.ttf", "NotoSerifArmenian.ttf", "Mshtakan.ttc"]
@@ -416,6 +438,103 @@ VERSIONS = {
             ),
         },
     },
+    "v6": {
+        # runs/v6-b013/ -- brief 013 Stage 3, fine-tuned from the released
+        # v5 weights (runs/v6/saved_models/v6/best_accuracy.pth).
+        "recipe": (
+            "scripts/finetune_real.py --iters 6000 from v5, batches mixing "
+            "real crops 0.5, v5's synthetic set relabelled with the "
+            "Armenian full stop 0.4 (scripts/relabel_dataset.py) and "
+            "all-caps lines 0.1 (scripts/render_synthetic_set.py --upper); "
+            "iteration count fixed in advance, checkpoint chosen on held-out "
+            "real crops"
+        ),
+        "dataset_config": None,
+        "dataset_note": (
+            "99,521 real crops (10,597 held out by page) cut with v5 from 862 "
+            "scanned pages of 16 sources: v5's 12, plus Tumanyan's collected "
+            "works vols. 7 and 10, Baronian's vols. 4 and 8, and 100 more "
+            "pages of Faustus of Byzantium 1968. Transcript colons in "
+            "Armenian words are labelled as the Armenian full stop. "
+            "Evaluation pages, and 25 pages that print an evaluation page's "
+            "text (tetrak_hy_trainer.heldout.OVERLAPPING_PAGES), are "
+            "excluded from every use"
+        ),
+        "charset": {"num_class": 175, "added": [], "note": "unchanged from v5"},
+        # The pre-train's faces, from runs/v4/train.log's `fonts:` line, and
+        # the all-caps set's (runs/v6-b013/render-caps.log).
+        "fonts": [
+            "GHEAGpalatBld.otf",
+            "GHEAGrapalatBlit.otf",
+            "GHEAGrapalatRit.otf",
+            "GHEAGrpalatReg.otf",
+            "GHEAMariamBld.otf",
+            "GHEAMariamBlit.otf",
+            "GHEAMariamRIt.otf",
+            "GHEAMariamReg.otf",
+            "NotoSansArmenian.ttf",
+            "NotoSerifArmenian.ttf",
+            "arnamu.ttf",
+            "arnamu_bold.ttf",
+            "arnamu_italic.ttf",
+            "arnamu_italic_bold.ttf",
+            "Mshtakan.ttc",
+        ],
+        "synthetic_validation": {
+            "word_accuracy": 95.2,
+            "norm_edit_distance": 0.9949,
+            "note": "inherited from the v4 pre-train; v6 is a fine-tune of v5",
+        },
+        "real_crop_validation": {
+            "word_accuracy": 95.187,
+            "norm_edit_distance": 0.9933,
+            "note": "10,597 crops from pages held out of the fine-tune, all 16 sources",
+        },
+        "real_scan_evaluation": {
+            "char_similarity": 0.3475,
+            "word_recall": 0.8379,
+            "pages": 10,
+            "source": REAL_EVAL_SOURCE,
+            "metric": REAL_EVAL_METRIC_V6,
+            "baselines": {
+                "tetrak-hy-v5": {"char_similarity": 0.3430, "word_recall": 0.8343},
+                "hye-calfa-n": {"char_similarity": 0.9600, "word_recall": 0.8426},
+                "hye-paddle": {"char_similarity": 0.3342, "word_recall": 0.8648},
+                "marker": {"char_similarity": 0.5262, "word_recall": 0.8358},
+                "tesseract-hye": {"char_similarity": 0.9456, "word_recall": 0.7728},
+            },
+            "note": (
+                "the model alone, joined in detector order: char_similarity "
+                "here measures reading order on three-column pages, not "
+                "recognition. Tetrak's pipeline (layout, lexicon decoding, "
+                "fold) scores 0.970 / 0.902 on the same pages"
+            ),
+        },
+        "per_register_evaluation": {
+            "metric": "mean word recall, model alone (no fold, no layout)",
+            "source": (
+                "runs/eval/<work>/ built by scripts/build_eval_sets.py; "
+                "scored by scripts/evaluate_registers.py"
+            ),
+            "registers": {
+                "ase-vol2": 0.8379,
+                "baronian-vol10": 0.9110,
+                "dictionary-hy-en": 0.6667,
+                "faustus-1968": 0.8744,
+                "medical-encyclopedia": 0.9260,
+                "otyan-works": 0.9337,
+                "totovents-works": 0.9289,
+                "tumanyan-elzh5": 0.8958,
+            },
+            "mean_over_registers": 0.8718,
+            "baseline_v5_mean": 0.8512,
+            "note": (
+                "higher than v5 on every register under the same metric. "
+                "Not comparable with the figures recorded for v5 itself, "
+                "which used the metric before brief 013 corrected it"
+            ),
+        },
+    },
 }
 
 
@@ -471,7 +590,9 @@ def write_safetensors(stripped: dict, target: Path) -> None:
     save_file(stripped, str(target))
 
 
-def provenance(bundle: Path, version: str, dataset_revision: str | None) -> dict:
+def provenance(
+    bundle: Path, version: str, dataset_revision: str | None, wordlist: Path | None = None
+) -> dict:
     commit = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=False
     ).stdout.strip()
@@ -481,7 +602,7 @@ def provenance(bundle: Path, version: str, dataset_revision: str | None) -> dict
         "version": version,
         "architecture": "EasyOCR generation2 (VGG + 2x BiLSTM + CTC)",
         "recipe": facts["recipe"],
-        "fonts": FONTS,
+        "fonts": facts.get("fonts", FONTS),
         "synthetic_validation": facts["synthetic_validation"],
         "real_scan_evaluation": facts["real_scan_evaluation"],
         "dataset": {
@@ -496,9 +617,15 @@ def provenance(bundle: Path, version: str, dataset_revision: str | None) -> dict
     # Optional, and carried into the published record when present: a
     # defect found after a version shipped belongs beside its numbers,
     # not only in a commit message nobody downloading weights will read.
-    for key in ("charset", "known_defects", "real_crop_validation"):
+    for key in ("charset", "known_defects", "real_crop_validation", "per_register_evaluation"):
         if key in facts:
             record[key] = facts[key]
+    if wordlist is not None:
+        record["wordlist"] = {
+            "file": WORDLIST_NAME,
+            "sha256": sha256(wordlist),
+            "attribution": WORDLIST_ATTRIBUTION,
+        }
     return record
 
 
@@ -516,6 +643,12 @@ def main() -> int:
         "--make-public",
         action="store_true",
         help="flip an already-reviewed repository to public and exit",
+    )
+    parser.add_argument(
+        "--wordlist",
+        type=Path,
+        default=None,
+        help=f"word list for tetrak_hy.lexicon, uploaded as {WORDLIST_NAME} (v6 on)",
     )
     args = parser.parse_args()
 
@@ -544,7 +677,7 @@ def main() -> int:
     except Exception as error:  # noqa: BLE001 — provenance is best-effort offline
         print(f"Could not resolve the dataset revision ({error}); recording null.")
 
-    record = provenance(args.bundle_dir, args.version_tag, dataset_revision)
+    record = provenance(args.bundle_dir, args.version_tag, dataset_revision, args.wordlist)
 
     with tempfile.TemporaryDirectory() as scratch:
         scratch_dir = Path(scratch)
@@ -565,6 +698,13 @@ def main() -> int:
                 path_in_repo=name,
                 repo_id=args.repo_id,
                 commit_message=f"Add {name} ({args.version_tag})",
+            )
+        if args.wordlist is not None:
+            api.upload_file(
+                path_or_fileobj=args.wordlist,
+                path_in_repo=WORDLIST_NAME,
+                repo_id=args.repo_id,
+                commit_message=f"Add {WORDLIST_NAME} ({args.version_tag})",
             )
         for name in ("model.safetensors", "provenance.json"):
             api.upload_file(

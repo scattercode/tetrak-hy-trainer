@@ -28,7 +28,7 @@ Prerequisites: this repository's venv; harvests under ``runs/harvest/``
 and the others the defaults name.
 
 Run:
-    python scripts/build_wordlist.py --out runs/v6-b013/wordlist.tsv \\
+    python scripts/build_wordlist.py --out runs/v6-b013/wordlist.tsv.gz \\
         [--nayiri nayiri-armenian-lexicon-2026-04-25-v3.json] \\
         [--exclude-crops runs/v6-b013/all_data/real_val]
 """
@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import gzip
 import json
 import re
 import sys
@@ -114,12 +115,19 @@ def main() -> int:
                         added += 1
         print(f"Nayiri: {added} forms added or raised to the minimum count")
 
+    # Only the words the decoder keeps are written: below --min-count they
+    # are dropped at load time anyway, and the list is downloaded by every
+    # user of the library. A .gz name compresses it (34 MB -> 3.6 MB).
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    with args.out.open("w", encoding="utf-8") as handle:
+    opener = gzip.open if args.out.suffix == ".gz" else open
+    kept = 0
+    with opener(args.out, "wt", encoding="utf-8") as handle:
         for word, count in counts.most_common():
+            if count < args.min_count:
+                break
             handle.write(f"{word}\t{count}\n")
-    kept = sum(1 for n in counts.values() if n >= args.min_count)
-    print(f"wrote {args.out}: {len(counts)} words, {kept} at or above {args.min_count}")
+            kept += 1
+    print(f"wrote {args.out}: {kept} words at or above {args.min_count} of {len(counts)}")
     return 0
 
 
