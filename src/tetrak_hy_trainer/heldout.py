@@ -74,6 +74,25 @@ WORK_PAGES: dict[str, frozenset[int]] = {
     "Popular medical encyclopedia": frozenset({413, 470, 512, 514, 749, 766, 771, 773, 775, 776}),
 }
 
+#: Pages that are not evaluation pages but print the same text as one --
+#: a variant or a reprint in an academic edition, a passage an index page
+#: repeats -- keyed by a substring naming one *volume*. Excluded from every
+#: training use exactly as held-out pages are, and never evaluated on.
+#: Found by brief 013's eight-word-shingle check of every harvested page
+#: against every evaluation transcript (five or more shared runs): before
+#: this, Tumanyan vol. 5 p. 691 put 203 eight-word runs of evaluation page
+#: 687 into the synthetic text. Re-run that check whenever a work with
+#: evaluation pages gains a volume, and before training on it.
+OVERLAPPING_PAGES: dict[str, frozenset[int]] = {
+    "Թումանյանի ԵԼԺ հ5.djvu": frozenset({63, 64, 142, 637, 684, 690, 691, 692}),
+    "Թումանյանի ԵԼԺ հ10.djvu": frozenset({430}),
+    "Collected works, vol. 10 (": frozenset(
+        {107, 205, 381, 570, 725, 737, 743, 745, 750, 751, 755, 756, 757}
+    ),
+    "Faustus of Byzantium": frozenset({214, 215}),
+    "(Soviet Armenian Encyclopedia) 9.djvu": frozenset({197}),
+}
+
 # The Wikisource index titles carry the volume as a trailing "<n>.djvu", as in
 # "Ինդեքս:Հայկական Սովետական Հանրագիտարան (Soviet Armenian Encyclopedia) 2.djvu".
 # The number is captured and compared as a number: the encyclopedia runs to
@@ -128,11 +147,20 @@ def held_out_pages(index_title: str) -> frozenset[int] | None:
 
 
 def page_is_held_out(index_title: str, page_number: int) -> bool:
-    """Whether one page of a work is reserved for evaluation."""
+    """Whether one page of a work must stay out of training.
+
+    True for evaluation pages, and for pages in :data:`OVERLAPPING_PAGES`
+    whose text an evaluation page also prints.
+    """
     if is_held_out(index_title):
         return True
     pages = held_out_pages(index_title)
-    return pages is not None and page_number in pages
+    if pages is not None and page_number in pages:
+        return True
+    return any(
+        needle in index_title and page_number in overlapping
+        for needle, overlapping in OVERLAPPING_PAGES.items()
+    )
 
 
 def assert_not_held_out(index_title: str, source: str = "") -> None:
