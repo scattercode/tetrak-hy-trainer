@@ -13,7 +13,8 @@ This is that check. Every harvested page that is not itself an evaluation
 page is compared with every evaluation transcript by eight-word shingles,
 after ``wikisource.normalise_transcript`` and lower-casing; five or more
 shared runs flags it. Pages already in ``OVERLAPPING_PAGES`` are reported as
-known. It exits 1 when it finds an unlisted page, so it can gate a harvest.
+known. It exits 1 when it finds an unlisted page, so it can gate a harvest,
+and 2 when it finds no evaluation transcripts to compare against.
 
 Run it whenever a work with evaluation pages gains a volume, before training
 on that volume, and add what it reports to ``OVERLAPPING_PAGES``.
@@ -60,6 +61,14 @@ def main() -> int:
         evaluation[f"{text_file.parent.parent.name} p.{text_file.stem}"] = shingles(
             text_file.read_text(encoding="utf-8")
         )
+    if not evaluation:
+        # An empty set compares against nothing and would pass the gate.
+        print(
+            f"check_eval_overlap: no evaluation transcripts under {args.eval_root} "
+            "(expected <register>/text/<page>.txt)",
+            file=sys.stderr,
+        )
+        return 2
     print(f"{len(evaluation)} evaluation pages")
 
     unlisted = known = 0
