@@ -48,6 +48,7 @@ Requires a Hugging Face login with write access to the ``tetrak`` org
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import subprocess
@@ -83,15 +84,35 @@ REAL_EVAL_METRIC_V6 = (
 )
 
 # The word list tetrak_hy.lexicon decodes with, published beside the
-# weights from v6 on. Its attribution travels with it.
+# weights from v6 on. Its attribution travels with it, read from the
+# sidecar build_wordlist.py writes so it names the inputs actually used.
 WORDLIST_NAME = "wordlist.tsv.gz"
-WORDLIST_ATTRIBUTION = (
-    "Word counts from proofread Armenian Wikisource transcripts (CC BY-SA "
-    "3.0), evaluation pages and pages printing their text excluded; with "
-    "every word form of the Nayiri Armenian Lexicon 2026-04-25-v3 (c) "
-    "Serouj Ourishian, CC BY 4.0, added at the minimum count. Built by "
-    "scripts/build_wordlist.py."
-)
+
+
+def wordlist_record(wordlist: Path) -> dict:
+    """The provenance entry for a word list, refusing one that cannot ship.
+
+    It is published as a ``.gz`` name, so plain text would be an asset that
+    fails to decompress; and without its sidecar there is nothing true to
+    say about its sources.
+    """
+    with wordlist.open("rb") as handle:
+        if handle.read(2) != b"\x1f\x8b":
+            raise SystemExit(f"{wordlist} is not gzip; build it with a .gz --out")
+    with gzip.open(wordlist, "rt", encoding="utf-8") as handle:
+        handle.readline()  # a truncated or corrupt stream fails here
+    sidecar = wordlist.with_name(wordlist.name + ".json")
+    if not sidecar.exists():
+        raise SystemExit(f"{sidecar} is missing; rebuild the list with scripts/build_wordlist.py")
+    meta = json.loads(sidecar.read_text(encoding="utf-8"))
+    return {
+        "file": WORDLIST_NAME,
+        "sha256": sha256(wordlist),
+        "words": meta["words"],
+        "nayiri": meta["nayiri"],
+        "attribution": meta["attribution"],
+    }
+
 
 # Every face the renderer actually used, from the `fonts:` line both runs
 # logged. Mshtakan ships with macOS; no font file is redistributed.
@@ -111,6 +132,29 @@ LABEL_QUOTING_DEFECT = (
     "error in v1's output on the evaluation pages, ahead of every genuine "
     "character confusion. Fixed for v2, which does not have it. Found "
     "2026-09-01."
+)
+
+INHERITED_OVERLAP = (
+    "v6 is fine-tuned from v5's weights, and its batches reuse v5's synthetic "
+    "crops (relabelled, not re-rendered). v5 was trained before "
+    "tetrak_hy_trainer.heldout.OVERLAPPING_PAGES existed, on text that "
+    "included those 25 pages, which print evaluation pages' text: variants "
+    "and reprints in Tumanyan's academic edition and Baronian's collected "
+    "works vol. 10, two pages of Faustus of Byzantium and one of the "
+    "Armenian Soviet Encyclopedia. The guard keeps them out of v6's new real "
+    "crops, its all-caps set and the word list, but cannot remove the "
+    "exposure from the starting weights or the reused synthetic crops, so "
+    "v6's figures on those four registers may be flattered by it. A "
+    "leakage-free model needs the synthetic set re-rendered without those "
+    "pages and a pre-train from scratch."
+)
+
+SYN_CAPS_VALIDATION_TRAINED = (
+    "The trainer selects dataset folders by substring, so selecting "
+    "syn_caps also loaded syn_caps_val: v6 trained on those 750 synthetic "
+    "validation crops. Nothing published is measured on them; the "
+    "checkpoint was chosen on held-out real crops. "
+    "render_synthetic_set.py now names its folders <name>_train and <name>_val."
 )
 
 MISSING_ABBREVIATION_DOT = (
@@ -458,9 +502,11 @@ VERSIONS = {
             "Armenian words are labelled as the Armenian full stop. "
             "Evaluation pages, and 25 pages that print an evaluation page's "
             "text (tetrak_hy_trainer.heldout.OVERLAPPING_PAGES), are "
-            "excluded from every use"
+            "excluded from all of v6's new data; v5's exposure to the 25 is "
+            "inherited (see known_defects)"
         ),
         "charset": {"num_class": 175, "added": [], "note": "unchanged from v5"},
+        "known_defects": [INHERITED_OVERLAP, SYN_CAPS_VALIDATION_TRAINED],
         # The pre-train's faces, from runs/v4/train.log's `fonts:` line, and
         # the all-caps set's (runs/v6-b013/render-caps.log).
         "fonts": [
@@ -621,11 +667,7 @@ def provenance(
         if key in facts:
             record[key] = facts[key]
     if wordlist is not None:
-        record["wordlist"] = {
-            "file": WORDLIST_NAME,
-            "sha256": sha256(wordlist),
-            "attribution": WORDLIST_ATTRIBUTION,
-        }
+        record["wordlist"] = wordlist_record(wordlist)
     return record
 
 

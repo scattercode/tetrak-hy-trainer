@@ -41,7 +41,7 @@ With the companion package's post-processing (below), v6 leads every Armenian OC
 | Armenian Soviet Encyclopedia vol. 2 | 0.837 | 0.839 | 0.865 hye-paddle |
 | Armenian–English dictionary | 0.667 | 0.677 | 0.678 marker |
 
-Word recall: the share of the transcript's words found in the output. Ten pages per register (five for the dictionary), never trained on, proofread on Armenian Wikisource. Lines are joined in detector order, as EasyOCR returns them. Pages that print an evaluation page's text are kept out of training as well.
+Word recall: the share of the transcript's words found in the output. Ten pages per register (five for the dictionary), never trained on, proofread on Armenian Wikisource. Lines are joined in detector order, as EasyOCR returns them. Pages that print an evaluation page's text are kept out of v6's new training data, but not out of what v6 inherits from v5 (below).
 
 **Character similarity measures reading order here, not recognition.** In detector order, v6 scores 0.91–0.95 on the single-column registers, and 0.30–0.35 on the multi-column encyclopedias, where EasyOCR's output is not in column order. In [Tetrak](https://tetrak.dev/)'s pipeline, which orders columns before joining, the same weights score 0.970 on the encyclopedia and 0.965 on the medical encyclopedia.
 
@@ -76,6 +76,11 @@ results = [
 
 - **Faustus of Byzantium:** the index and notes are set in a bold italic whose digits v6 confuses (`2` read as `8` or `7`).
 - **Tumanyan:** the academic edition's apparatus quotes Russian, and the charset has no Cyrillic.
+
+### Known defects
+
+- **Inherited evaluation-text exposure.** 25 harvested pages print an evaluation page's text: variants and reprints in Tumanyan's academic edition and Baronian's collected works vol. 10, two pages of Faustus of Byzantium and one of the Armenian Soviet Encyclopedia. They are excluded from v6's new real crops, its all-caps set and the word list. But v6 starts from v5's weights and reuses v5's synthetic crops, both made before the exclusion existed, so the exposure is inherited. v6's figures on those four registers may be flattered by it. Removing it needs a new pre-train.
+- **Synthetic validation trained on.** v6 also trained on the 750 crops meant to validate its all-caps set. No figure above is measured on them.
 
 ### Charset
 

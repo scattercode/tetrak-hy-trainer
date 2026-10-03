@@ -22,7 +22,10 @@ orthography, where it extends coverage well beyond the harvest.
 
 The word list is derived from CC BY-SA 3.0 Wikisource text (and, with
 ``--nayiri``, CC BY 4.0 data); its attribution travels with it wherever it
-is published, as the weights' does.
+is published, as the weights' does. A sidecar ``<out>.json`` records the
+inputs actually used and the attribution they require; ``upload_model.py
+--wordlist`` publishes that, so the attribution cannot claim a source the
+list was not built from.
 
 Prerequisites: this repository's venv; harvests under ``runs/harvest/``
 and the others the defaults name.
@@ -38,6 +41,7 @@ from __future__ import annotations
 import argparse
 import collections
 import gzip
+import hashlib
 import json
 import re
 import sys
@@ -52,6 +56,15 @@ _ARMENIAN_LETTER = re.compile(r"[Ա-Ֆա-և]")
 # The decoder's key: Armenian letters only, so U+055A-U+055F (՝ ՛ ՜ ՞),
 # which sit between the two letter ranges, are stripped as punctuation.
 _EDGES = re.compile(r"^[^\wԱ-Ֆա-և]+|[^\wԱ-Ֆա-և]+$")
+
+
+def source_slug(name: str) -> str:
+    """The crop-name prefix for a harvest directory.
+
+    Must match ``harvest_real_crops.source_slug``, which names crops; not
+    imported from it because that script loads easyocr at import time.
+    """
+    return re.sub(r"[^A-Za-z0-9]+", "-", name).strip("-")
 
 
 def harvest_dirs() -> list[Path]:
@@ -93,7 +106,7 @@ def main() -> int:
             if heldout.page_is_held_out(index, page):
                 held_out += 1
                 continue
-            if page in excluded.get(directory.name, ()):
+            if page in excluded.get(source_slug(directory.name), ()):
                 continue
             read += 1
             text = wikisource.normalise_transcript(text_file.read_text(encoding="utf-8"))
@@ -128,6 +141,42 @@ def main() -> int:
             handle.write(f"{word}\t{count}\n")
             kept += 1
     print(f"wrote {args.out}: {kept} words at or above {args.min_count} of {len(counts)}")
+
+    attribution = (
+        "Word counts from proofread Armenian Wikisource transcripts (CC BY-SA "
+        "3.0), evaluation pages and pages printing their text excluded"
+    )
+    nayiri = None
+    if args.nayiri:
+        release = args.nayiri.name.removeprefix("nayiri-armenian-lexicon-").removesuffix(".json")
+        nayiri = {
+            "file": args.nayiri.name,
+            "sha256": hashlib.sha256(args.nayiri.read_bytes()).hexdigest(),
+        }
+        attribution += (
+            f"; with every word form of the Nayiri Armenian Lexicon {release} "
+            "(c) Serouj Ourishian, CC BY 4.0, added at the minimum count"
+        )
+    sidecar = args.out.with_name(args.out.name + ".json")
+    sidecar.write_text(
+        json.dumps(
+            {
+                "file": args.out.name,
+                "words": kept,
+                "min_count": args.min_count,
+                "pages_read": read,
+                "held_out_pages_skipped": held_out,
+                "crop_pages_excluded": str(args.exclude_crops) if args.exclude_crops else None,
+                "nayiri": nayiri,
+                "attribution": attribution + ". Built by scripts/build_wordlist.py.",
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    print(f"wrote {sidecar}")
     return 0
 
 
