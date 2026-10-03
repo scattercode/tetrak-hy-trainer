@@ -168,6 +168,9 @@ def main() -> int:
                 "held_out_pages_skipped": held_out,
                 "crop_pages_excluded": str(args.exclude_crops) if args.exclude_crops else None,
                 "nayiri": nayiri,
+                # Derived from CC BY-SA text, so share-alike; CC BY data may
+                # be included in a BY-SA 4.0 work.
+                "licence": "CC-BY-SA-4.0",
                 "attribution": attribution + ". Built by scripts/build_wordlist.py.",
             },
             indent=2,

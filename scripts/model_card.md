@@ -56,7 +56,7 @@ The recognition head has no language model, so two kinds of slip remain that a p
 - **`fold_script`** turns a Latin twin inside an Armenian word back into the Armenian letter (`h` → `հ`, `:` → `։`). It also reads `Չ` and `շ` as the digit 2 inside a number, which bold italic page numbers confuse.
 - **`tetrak_hy.lexicon`** looks at each word whose reading is not in a word list. It takes the most probable listed reading from the model's own alternatives for that word, if it is nearly as probable. On the held-out pages it fixed 465 words and broke 13: proper nouns, and classical or edition spellings the list does not know.
 
-`wordlist.tsv.gz` in this repository is that list. It holds 1.13 million word forms, counted from proofread Armenian Wikisource transcripts with the evaluation pages excluded. It adds the [Nayiri Armenian Lexicon](http://www.nayiri.com/nayiri-armenian-lexicon) (© Serouj Ourishian, CC BY 4.0).
+`wordlist.tsv.gz` in this repository is that list. It holds 1.13 million word forms, counted from proofread Armenian Wikisource transcripts with the evaluation pages excluded. It adds the [Nayiri Armenian Lexicon](http://www.nayiri.com/nayiri-armenian-lexicon) (© Serouj Ourishian, CC BY 4.0). Because it is derived from those sources, the list is licensed **CC BY-SA 4.0**, not Apache 2.0 like the weights.
 
 ```python
 import tetrak_hy
@@ -153,6 +153,11 @@ CC BY-SA; we publish the text itself, share-alike, in the dataset
 repository above, and take the position — shared by most of the
 ecosystem, though not legally settled — that trained weights are not
 a redistribution or adaptation of the training text.
+
+`wordlist.tsv.gz` is different: it is counted directly from CC BY-SA 3.0
+Wikisource text and includes the CC BY 4.0 Nayiri Armenian Lexicon, so it
+is licensed CC BY-SA 4.0, with the attribution recorded in
+`provenance.json`.
 
 ## Related
 

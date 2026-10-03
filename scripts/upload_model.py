@@ -110,6 +110,7 @@ def wordlist_record(wordlist: Path) -> dict:
         "sha256": sha256(wordlist),
         "words": meta["words"],
         "nayiri": meta["nayiri"],
+        "licence": meta["licence"],
         "attribution": meta["attribution"],
     }
 
