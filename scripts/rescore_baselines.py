@@ -30,7 +30,11 @@ from tetrak_ocr.accuracy import character_similarity, word_recall
 def rescore(eval_dir: Path) -> None:
     for path in sorted(eval_dir.glob("baselines*.csv")):
         with path.open(encoding="utf-8") as handle:
-            rows = list(csv.DictReader(handle))
+            reader = csv.DictReader(handle)
+            rows = list(reader)
+            # Taken from the header, not the first row: a backend filter that
+            # matched nothing leaves a header-only file, which is valid.
+            fieldnames = reader.fieldnames or []
         stale = 0
         for row in rows:
             reading = eval_dir / "readings" / row["backend"] / f"{row['page']}.txt"
@@ -42,7 +46,7 @@ def rescore(eval_dir: Path) -> None:
             row["char_sim"] = f"{character_similarity(text, expected):.4f}"
             row["word_recall"] = f"{word_recall(text, expected):.4f}"
         with path.open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(rows)
         note = f", {stale} row(s) left unscored or without a reading" if stale else ""
