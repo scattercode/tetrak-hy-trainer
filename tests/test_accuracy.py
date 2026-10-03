@@ -41,6 +41,15 @@ class TestCharacterSimilarity:
         reversed_words = "delta gamma beta alpha"
         assert character_similarity(reversed_words, words) < 0.6
 
+    def test_a_long_page_is_not_scored_on_its_rare_characters(self):
+        """difflib's autojunk, on by default, treats every character making up
+        over 1% of a string longer than 200 as junk -- on a page, most of the
+        alphabet -- and scored a near-perfect Armenian page at about 0.76."""
+        page = "Հայաստանի պատմության մասին գիրքը կարդացի երեկ երեկոյան։ " * 12
+        misread = page.replace("գիրքը", "գիրքր", 1)
+        assert len(page) > 200
+        assert character_similarity(misread, page) > 0.99
+
 
 class TestWordRecall:
     def test_every_word_found_scores_one(self):
