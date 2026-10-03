@@ -7,7 +7,10 @@ headwords are set in capitals, and v5's confusions there (``Հ``→``Վ``,
 almost all lower case, because running text is. This renders lines from
 the same harvested text, through the same fonts, sizes and degradations
 as ``train_synthetic.py``, into a named set that ``finetune_real.py``
-mixes in with ``--select-data`` and ``--batch-ratio``.
+mixes in with ``--select-data`` and ``--batch-ratio``. The folders are
+``<name>_train`` and ``<name>_val``: the trainer selects folders by
+substring, so a bare ``<name>`` would select the validation folder too
+(v6 trained on ``syn_caps_val`` this way).
 
 ``--index`` renders the other shape brief 013's error analysis asked for:
 index entries and page-number lists ("Կոգ (գավառ) — 159, 231, 288",
@@ -83,7 +86,7 @@ def index_line(words: list[str], rng: random.Random, chars_max: int = 30) -> str
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-name", required=True)
-    parser.add_argument("--name", required=True, help="train folder; validation is <name>_val")
+    parser.add_argument("--name", required=True, help="folders are <name>_train and <name>_val")
     parser.add_argument("--harvest-dirs", nargs="+", type=Path, required=True)
     parser.add_argument("--max-samples", type=int, default=30_000)
     parser.add_argument("--repeats", type=int, default=2)
@@ -136,9 +139,11 @@ def main() -> int:
         args.repeats,
         use_augment=True,
         seed=args.seed,
-        names=(args.name, f"{args.name}_val"),
+        names=(f"{args.name}_train", f"{args.name}_val"),
     )
-    print(f"rendered {crops} crops into {root / args.name} in {time.time() - started:.0f}s")
+    print(
+        f"rendered {crops} crops into {root / f'{args.name}_train'} in {time.time() - started:.0f}s"
+    )
     return 0
 
 
