@@ -277,8 +277,14 @@ _TRANSCRIPT_SUBSTITUTIONS = {
 _ARMENIAN_TOKEN_COLON = re.compile(r"\S*[\u0531-\u0556\u0561-\u0587]\S*")
 
 
+# Only a colon ending the token, optionally before closing punctuation, is
+# the full stop: "բժշկի:" and "Հ.:" are, but the colon in "10:30-ին" -- a
+# time with an Armenian suffix -- is genuine print.
+_TERMINAL_COLON = re.compile(r":(?=[^\w]*$)")
+
+
 def _armenian_full_stops(text: str) -> str:
-    return _ARMENIAN_TOKEN_COLON.sub(lambda match: match.group().replace(":", "։"), text)
+    return _ARMENIAN_TOKEN_COLON.sub(lambda match: _TERMINAL_COLON.sub("։", match.group()), text)
 
 
 def normalise_transcript(text: str) -> str:

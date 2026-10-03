@@ -349,6 +349,10 @@ class TestNormaliseTranscript:
         text = "10:30 1:2 Note: բժշկի ։"
         assert wikisource.normalise_transcript(text) == text
 
+    def test_a_time_with_an_armenian_suffix_keeps_its_colon(self) -> None:
+        """Only a token's closing colon is the full stop."""
+        assert wikisource.normalise_transcript("10:30-ին բժշկի:»") == "10:30-ին բժշկի։»"
+
     def test_it_is_idempotent(self) -> None:
         """Applied by clean_wikitext and again at read time, so it must be."""
         once = wikisource.normalise_transcript("<Ա> − բ: 10:30")
