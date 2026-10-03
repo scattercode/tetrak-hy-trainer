@@ -81,8 +81,9 @@ WORK_PAGES: dict[str, frozenset[int]] = {
 #: Found by brief 013's eight-word-shingle check of every harvested page
 #: against every evaluation transcript (five or more shared runs): before
 #: this, Tumanyan vol. 5 p. 691 put 203 eight-word runs of evaluation page
-#: 687 into the synthetic text. Re-run that check whenever a work with
-#: evaluation pages gains a volume, and before training on it.
+#: 687 into the synthetic text. That check is scripts/check_eval_overlap.py:
+#: run it whenever a work with evaluation pages gains a volume, before
+#: training on it.
 OVERLAPPING_PAGES: dict[str, frozenset[int]] = {
     "Թումանյանի ԵԼԺ հ5.djvu": frozenset({63, 64, 142, 637, 684, 690, 691, 692}),
     "Թումանյանի ԵԼԺ հ10.djvu": frozenset({430}),

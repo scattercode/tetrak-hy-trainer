@@ -5,29 +5,32 @@ Guidance for Claude Code when working in this repository.
 ## What this repository is
 
 **tetrak-hy-trainer** trains an Armenian text-recognition model and packages
-it as an EasyOCR custom model. It is the training half of a two-repo
-arrangement:
+it as an EasyOCR custom model. It is the producing end of a three-repo
+arrangement (Tetrak ADR 001):
 
-- **This repo** (public, Apache 2.0) owns the synthetic-data pipeline, the
-  trainer, the charset, the training configs, and the packaging step that
-  emits the deliverable.
-- **Tetrak** (the OCR pipeline behind [tetrak.dev](https://tetrak.dev/))
-  ships the inference files and downloads the trained weights from this
-  repo's GitHub Releases. It also holds the product-level plan and the
-  provenance records for published weights.
+- **This repo** (public, Apache 2.0) owns the data pipeline, the trainer, the
+  charset, the packaging step, the word list, and the upload to the Hugging
+  Face model repository `tetrak/easyocr-armenian`, which is canonical for the
+  weights.
+- **tetrak-easyocr-armenian** (public) *ships* them: the `tetrak_hy` package
+  on PyPI pins each release's Hub commit and checksums.
+- **Tetrak** (public; the pipeline behind [tetrak.dev](https://tetrak.dev/))
+  *consumes* that package as its `easyocr-hy` backend. Its product plan and
+  decision records are in the private `tetrak-product` repository.
 
-The deliverable is exactly three files, named for the network:
-`tetrak_hy.yaml` (charset + network params), `tetrak_hy.py` (the
+The deliverable is a bundle of three files named for the network:
+`tetrak_hy.yaml` (charset and network params), `tetrak_hy.py` (the
 architecture module) and `tetrak_hy.pth` (weights), loaded by
-`easyocr.Reader(['hy'], recog_network='tetrak_hy', ...)`.
+`easyocr.Reader(['en'], recog_network='tetrak_hy')` (see below for why `en`).
+Since v6 a word list for lexicon-aided decoding travels beside it.
 
 ## Hard rules
 
 ### The Portmind quarantine
 
-A CC BY-NC 4.0 repository, `portmind-armenian-ocr`, sits in this same
-workspace (`../portmind-armenian-ocr`). It validated the approach this
-project uses, and **nothing from it may enter this repository — ever**:
+A CC BY-NC 4.0 repository, `portmind-armenian-ocr`, validated the approach
+this project uses. It has been deleted from the workspace (do not pull it
+back from GitHub), and **nothing from it may enter this repository — ever**:
 
 - Never copy code from it, however small the fragment. Its licence is
   non-commercial; this repo is Apache 2.0 and public. A copied line here
@@ -54,9 +57,10 @@ breaks loading in the field:
 - The yaml must carry `character_list`, `lang_list`, `imgH` and
   `network_params`. Its `lang_list` gates which languages a `Reader` may
   request.
-- A missing `hy` dictionary in EasyOCR is tolerated (greedy decode needs
-  none); an Armenian wordlist is a later beam-search upgrade, not a
-  launch requirement.
+- A missing `hy` dictionary in EasyOCR is tolerated: greedy decoding needs
+  none. The word list is this project's own, built by
+  `scripts/build_wordlist.py` and used by `tetrak_hy.lexicon` through
+  EasyOCR's `beamsearch` decoder hook.
 - **Load with `Reader(['en'], recog_network='tetrak_hy')`, not `['hy']`.**
   A spike finding (2026-08-29, `scripts/spike_easyocr_loading.py`):
   `setLanguageList` reads `easyocr/character/<lang>_char.txt` for every
@@ -70,24 +74,26 @@ breaks loading in the field:
 
 ### The held-out evaluation split
 
-Every published figure for this model — v0's 0.0745/0.2742, v1's
-0.1004/0.5014, the baselines they are measured against — comes from ten pages
-of **volume 2** of the Armenian Soviet Encyclopedia. Volume 2 is held out
-**whole**, not merely pages 105–114, and has never been harvested for
-training.
-
-`runs/eval/ase-vol2/` is also the one directory in this repository with page
-images already sitting in it, which makes it precisely the thing a harvester
-gets pointed at by accident. Nothing would fail; the numbers would simply
-start improving for the wrong reason, and every published figure would become
-wrong.
+Every published figure for this model comes from held-out pages of eight
+registers, under `runs/eval/<register>/`. Volume 2 of the Armenian Soviet
+Encyclopedia is held out **whole**; every other work contributes held-out
+pages of its own, registered in `WORK_PAGES` before anything trains on that
+work. Those evaluation directories are the only ones here with page images
+already in them, which makes them precisely the thing a harvester gets pointed
+at by accident. Nothing would fail; the numbers would simply start improving
+for the wrong reason.
 
 `src/tetrak_hy_trainer/heldout.py` enforces this and is deliberately a module
 of its own so it cannot be diluted into some larger helper. It checks the
 harvest *manifest*, not the directory name, so a copied or renamed directory
-cannot get past it. Brief 012 widened it from one rule to a registry
-(`WORK_PAGES`): each new work contributes held-out pages of its own, chosen
-before anything trains on that work.
+cannot get past it.
+
+**Pages that print an evaluation page's text are held out too.** Academic
+editions reprint and vary their texts, so another volume can carry an
+evaluation page almost word for word. `OVERLAPPING_PAGES` lists the 25 found
+by brief 013's check, now `scripts/check_eval_overlap.py`; run it whenever a
+work with evaluation pages gains a volume, before training on it. v5 trained on those pages before the
+list existed, and v6 inherits that exposure (recorded in its provenance).
 
 Held-out material is excluded from **both** uses of a harvest — real crops
 obviously, but also the synthetic sampler, since rendering an evaluation
@@ -108,12 +114,14 @@ model version, never a patch.
 ### Artefact discipline
 
 - **No weights, no datasets, no crops in git.** Synthetic data is
-  regenerated from committed recipes; weights are published as GitHub
-  Release assets with a checksum and a provenance record (data recipe,
-  font list, real-crop counts, config, git SHA).
-- **Record every data source's licence.** Corpus texts (e.g. Armenian
-  Wikisource — public domain; Armenian Wikipedia — CC BY-SA) and fonts
-  (OFL) are listed with their licences in the README as they are adopted.
+  regenerated from committed recipes; weights and the word list are uploaded
+  to `tetrak/easyocr-armenian` on the Hub by `scripts/upload_model.py`, with
+  checksums and a provenance record (recipe, fonts, crop counts, config, git
+  SHA, known defects).
+- **Record every data source's licence.** Armenian Wikisource text is CC BY-SA
+  3.0; fonts are OFL; the word list is CC BY-SA 4.0 because of what it is
+  counted from. Licences are listed in the README as sources are adopted, and
+  the word list's attribution travels in its sidecar and provenance.
 - Code derived from EasyOCR's trainer keeps its Apache 2.0 headers, and
   the NOTICE file is updated when such code lands.
 
@@ -128,8 +136,9 @@ model version, never a patch.
   machines then disagree.
 - Write docs in the first person plural — this is a collaborative
   project.
-- Public docs here must not link into the Tetrak repository's paths
-  (it is private); link to tetrak.dev where a pointer is needed.
+- Public docs here must not link into the private `tetrak-product`
+  repository; cite its decisions by number ("Tetrak ADR 001"). Link to
+  tetrak.dev, or to the public Tetrak repository, where a pointer is needed.
 
 ## Commands
 
@@ -157,15 +166,16 @@ lost. Each script's own docstring says so too; this is the map.
 | `train_synthetic.py`, `finetune_real.py` | this repo's venv with the **`[train]`** extra | torch and the vendored trainer |
 | `harvest_real_crops.py` | **`../tetrak-easyocr-armenian/.venv/bin/python`** | needs easyocr *and* torch; `[train]` has no easyocr |
 | `score_fold.py` | the same sibling venv | imports the published `tetrak_hy` package |
-| `evaluate_baselines.py` | **Tetrak's venv, from Tetrak's repo root** | imports `tetrak_ocr` backends; the Claude backend needs Tetrak's `.env` |
+| `render_synthetic_set.py`, `relabel_dataset.py` | this repo's venv with **`[train]`** | the renderer and fonts |
+| `evaluate_baselines.py`, `rescore_baselines.py` | **Tetrak's venv, from Tetrak's repo root** | import `tetrak_ocr`; the Claude backend needs Tetrak's `.env` |
 | everything else | this repo's plain `.venv` | standard library plus core deps |
 
-`evaluate_baselines.py` is the only script that may import from Tetrak. It
-benchmarks Tetrak's backends, so it can only run there anyway. **Nothing else
-may**: this repository is public and Tetrak is not, so an import of it is a
-dependency an outside contributor cannot satisfy. The scoring metrics are
-therefore a deliberate copy at `src/tetrak_hy_trainer/accuracy.py` — see its
-docstring for the obligation that copy carries.
+The two baseline scripts are the only ones that may import from Tetrak: they
+benchmark its backends, so they can only run there anyway. **Nothing else
+may.** Tetrak is public now, but it is a whole pipeline to install for three
+metric functions, so the scoring metrics stay a deliberate copy at
+`src/tetrak_hy_trainer/accuracy.py`; its docstring says what that copy obliges
+(the two must change together, as brief 013's metric fix did).
 
 ### The `runs/` layout the defaults expect
 
@@ -174,15 +184,18 @@ shape:
 
 ```text
 runs/
-├── v0/fonts/            rendering faces (fetch_fonts.py)
-├── v0/harvest/          first text-only harvest
-├── v1/harvest-vol*/     per-volume harvests
-├── v2/all_data/         syn_train, syn_val, real_train, real_val — one root
-├── v2/saved_models/v2/  checkpoints; best_accuracy.pth
-├── v2/bundle/           packaged tetrak_hy.{yaml,py,pth}
-├── eval/ase-vol2/       the held-out evaluation set — never train on it
-└── census/census.json   the Wikisource census cache
+├── v0/fonts/                rendering faces (fetch_fonts.py)
+├── v0/harvest/, v1/harvest-*, harvest/<work>/   harvested transcripts and scans
+├── <run>/all_data/          syn_train, syn_val, real_train, real_val, extra sets — one root
+├── <run>/saved_models/<run>/  checkpoints; best_accuracy.pth
+├── <run>/bundle/            packaged tetrak_hy.{yaml,py,pth}
+├── <run>/wordlist.tsv.gz    the word list, with its .json sidecar
+├── eval/<register>/         the held-out evaluation sets — never train on them
+└── census/census.json       the Wikisource census cache
 ```
+
+`runs/v6/` holds the released v5 weights (the numbering slipped once); write
+new runs under a fresh name such as `runs/v7/` and check it is unused first.
 
 For the pipeline itself — census, harvest, charset check, pre-train, real
 crops, fine-tune, evaluate, upload — load the **`tetrak-hy-training`** skill
@@ -213,9 +226,12 @@ them by hand.
   place, checked by `sync.sh --check`.
 - Never edit `CHANGELOG.md` by hand — change the commit messages or the
   `commit_parsers` in `cliff.toml` instead.
-- Never create tags or Releases manually. Trained weights are *attached* to
-  the automatically created releases as assets, with checksum and
-  provenance record.
+- Never create tags or Releases manually. A release here publishes the
+  trainer package to PyPI; weights are not attached to it. They go to the
+  Hub, and the library pins them (its `tetrak-hy-weights-release` skill).
+- Developer scripts and records (`scripts/`, `VERSIONS` entries) are `chore:`
+  or `docs:`, not `feat:`: a `feat` or `fix` cuts a release and publishes a
+  wheel.
 - **The package version comes from the git tag**, via `hatch-vcs`. Do not
   add a `version = "..."` literal back to `pyproject.toml` — nothing
   updates it, so it silently goes stale.
@@ -226,9 +242,9 @@ them by hand.
 
 ## Where decisions live
 
-The staged plan (baselines gate, spike, synthetic pipeline, training,
-packaging) and its decision log live in Tetrak's product zone, not here —
-this repo does not restate them. Tetrak's ADRs are cited by number from both
+The staged plan and its decision log live in the private `tetrak-product`
+repository (briefs 011–013 cover this model), not here; this repo does not
+restate them. Tetrak's ADRs are cited by number from both
 satellite repositories ("ADR 001", "decision 003"), so they are load-bearing
 here even though they are not published.
 
