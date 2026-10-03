@@ -1,6 +1,6 @@
 ---
 name: tetrak-hy-training
-description: Run the Armenian recogniser pipeline end to end in tetrak-hy-trainer — census and harvest Wikisource, check the charset, render and pre-train on synthetic crops, harvest real crops, fine-tune, evaluate, package a bundle and upload weights to Hugging Face. Covers which interpreter runs which script, the runs/ layout the defaults expect, the held-out evaluation rules, and the traps that have each cost a training run. Use this whenever training, fine-tuning or evaluating the model, harvesting pages or crops, adding a corpus source, changing the charset, packaging a bundle, or publishing weights.
+description: Run the Armenian recogniser pipeline end to end in tetrak-hy-trainer — census and harvest Wikisource, check the charset and the evaluation overlap, render and pre-train on synthetic crops, harvest real crops, fine-tune, measure, build the word list, package a bundle and upload weights to Hugging Face. Covers the held-out evaluation rules and the traps that have each cost a training run. Use this whenever training, fine-tuning or evaluating the model, harvesting pages or crops, adding a corpus source, changing the charset, building the word list, packaging a bundle, or publishing weights.
 ---
 
 # Training the Armenian recogniser
@@ -8,60 +8,19 @@ description: Run the Armenian recogniser pipeline end to end in tetrak-hy-traine
 The whole pipeline, in the order it runs. Every step here has cost a run at
 least once when skipped or done in the wrong order — the traps are marked.
 
-## Before anything: which interpreter
+## Before anything
 
-This repository has **three** ways of running a script, and picking the wrong
-one is the usual first five minutes lost.
+`CLAUDE.md` has the two maps this pipeline leans on: **which interpreter runs
+which script** (picking the wrong one is the usual first five minutes lost),
+and **the `runs/` layout** the scripts' defaults expect. It also carries the
+hard rules, the held-out split above all. Read those first; they are not
+repeated here.
 
-| Script | Run it with | Why |
-|---|---|---|
-| `upload_model.py`, `upload_dataset.py` | `uv run scripts/<name>.py` | PEP 723 inline dependencies (`huggingface_hub`, `safetensors`) declared in the file header |
-| `train_synthetic.py`, `finetune_real.py` | the venv with the **`[train]`** extra | torch, torchvision, the vendored trainer |
-| `harvest_real_crops.py` | **the sibling library's venv** — `../tetrak-easyocr-armenian/.venv/bin/python` | needs easyocr *and* torch; this repo's `[train]` extra has no easyocr |
-| `evaluate_baselines.py` | **Tetrak's venv, from Tetrak's repo root** | imports `tetrak_ocr` backends, and the Claude backend needs Tetrak's `.env` |
-| everything else (`charset_diff`, `wikisource_census`, `fetch_fonts`, `score_fold`, `confusion_report`) | this repo's plain `.venv` | standard library plus the core deps |
-
-The pre-push hook runs the suite through `.venv/bin/python` when that exists,
-so it no longer needs `.venv` on PATH by hand.
-
-## The `runs/` layout the defaults expect
-
-`runs/` is gitignored in full — weights, datasets and crops are never
-committed. But the scripts' default paths assume this shape, so keep it:
-
-```text
-runs/
-├── v0/fonts/                 rendering faces (fetch_fonts.py puts them here)
-├── v0/harvest/               first text-only harvest
-├── v1/harvest-vol*/          per-volume harvests
-├── v2/all_data/              syn_train, syn_val, real_train, real_val
-├── v2/saved_models/v2/       checkpoints; best_accuracy.pth
-├── v2/bundle/                packaged tetrak_hy.{yaml,py,pth}
-├── eval/ase-vol2/            THE HELD-OUT EVALUATION SET — never train on it
-└── census/census.json        the Wikisource census cache
-```
-
-## Hard rule: the held-out split
-
-Every published figure for this model comes from ten pages of **volume 2** of
-the Armenian Soviet Encyclopedia, and volume 2 is held out **whole** — not
-merely pages 105–114. `runs/eval/ase-vol2/` is also the one directory with
-page images already sitting in it, which makes it the easy thing to point a
-harvester at by mistake.
-
-`tetrak_hy_trainer.heldout` enforces this and `harvest_real_crops.py` calls it
-before reading anything, against the *manifest* rather than the directory name
-so a copied or renamed directory cannot get past. Brief 012 widened it to a
-registry (`WORK_PAGES`) so each new work contributes held-out pages of its
-own, chosen before anything trains on that work.
-
-Held-out pages are excluded from **both** uses of a harvest — real crops
-obviously, but also the synthetic sampler, since rendering an evaluation
-page's transcript would let the model memorise the text it is later scored on
-reading.
-
-If a guard fires, do not work around it. Change the split deliberately in
-`heldout.py` and re-baseline everything.
+The short version of the split: every evaluation page, and every harvested
+page that reprints one (`OVERLAPPING_PAGES`), is excluded from real crops,
+from the synthetic sampler and from the word list. `harvest_real_crops.py`
+checks the harvest manifest before reading anything. If a guard fires, do not
+work around it.
 
 ---
 
@@ -172,17 +131,22 @@ teaches the wrong shape, so it fails closed.
 
 ```bash
 PYTORCH_ENABLE_MPS_FALLBACK=1 caffeinate -ims \
-    python scripts/finetune_real.py --device mps \
-    --data-root runs/v2/all_data \
-    --saved-model runs/v2/saved_models/v2/best_accuracy.pth \
-    --eval-dir runs/eval/ase-vol2
+    python scripts/finetune_real.py --device mps --run-name <run> \
+    --data-root runs/<run>/all_data \
+    --saved-model runs/<parent>/saved_models/<parent>/best_accuracy.pth \
+    --select-data real_train-syn_train --batch-ratio 0.5-0.5 \
+    --iters 6000 --eval-dir runs/eval/<register>
 ```
 
 An hour or two, not eleven.
 
-- **Start from v2, never v1** — a fine-tune inherits its parent's charset, so
-  v1 would carry the U+2024 hole forward and the CTC head would not match the
-  v2 yaml.
+- **Start from the latest weights with the charset you want.** A fine-tune
+  inherits its parent's charset, so an older parent carries its gaps forward
+  (v1's missing U+2024) and its CTC head will not match a newer yaml.
+- Extra rendered sets (all-caps, index lines) come from
+  `scripts/render_synthetic_set.py`, which names them `<name>_train` and
+  `<name>_val`. Select the `_train` folder: the trainer matches folders by
+  substring, so a bare `<name>` also selects the validation set (v6 did).
 - Real and synthetic are mixed **in every batch** (50/50 by `batch_ratio`),
   not trained in sequence: a few thousand real crops against 175,500 synthetic
   is the classic recipe for catastrophic forgetting.
@@ -212,18 +176,44 @@ Word recall alone cannot tell you whether the shape cluster on `հ` moved.
 Recompute the confusion table before and after and read them side by side —
 that is the fine-tune's scorecard.
 
-For the full backend comparison, `evaluate_baselines.py` from Tetrak's venv.
+For the full backend comparison, `evaluate_baselines.py` from Tetrak's venv;
+when only the metric changes, `rescore_baselines.py` re-scores the saved
+readings in seconds.
 
-## 9. Publish the weights
+## 9. Build the word list
 
 ```bash
-uv run scripts/upload_model.py --bundle-dir runs/v3/bundle --version-tag v3 --dry-run
-uv run scripts/upload_model.py --bundle-dir runs/v3/bundle --version-tag v3
-uv run scripts/upload_model.py --version-tag v3 --make-public   # after review
+python scripts/build_wordlist.py --out runs/<run>/wordlist.tsv.gz \
+    --nayiri nayiri-armenian-lexicon-<release>.json
 ```
 
-Needs `hf auth login` with write access to the `tetrak` org. The repository is
-created **private**; review it on the Hub, then flip it public.
+Counts words in the proofread transcripts, held-out pages excluded, and adds
+the Nayiri Armenian Lexicon if given. It writes a `.json` sidecar naming the
+inputs it actually used and the attribution and licence (CC BY-SA 4.0) they
+require; the upload publishes that, so keep the two together. To choose the
+decoder's threshold on validation crops, build a separate list with
+`--exclude-crops runs/<run>/all_data/real_val` so those pages' words are not in
+it.
+
+## 10. Publish the weights
+
+```bash
+uv run scripts/upload_model.py --bundle-dir runs/<run>/bundle --version-tag vN \
+    --wordlist runs/<run>/wordlist.tsv.gz --dry-run
+uv run scripts/upload_model.py --repo-id tetrak/easyocr-armenian-staging \
+    --bundle-dir runs/<run>/bundle --version-tag vN --wordlist runs/<run>/wordlist.tsv.gz
+uv run scripts/upload_model.py --bundle-dir runs/<run>/bundle --version-tag vN \
+    --wordlist runs/<run>/wordlist.tsv.gz              # after review
+```
+
+Needs `hf auth login` with write access to the `tetrak` org.
+
+**`tetrak/easyocr-armenian` is public, so an upload to it is live at once.**
+The script creates a repository private only when it does not exist yet. To
+review a release first, upload it to a private staging repository with
+`--repo-id` (it is created private), check the card and files there, then
+upload to the real one. The script's closing "(private, …)" message is wrong
+for an existing public repository.
 
 Before uploading it checks the weights against the yaml — the CTC head's
 output size must equal `len(character_list) + 1` — so a charset/weights
@@ -235,8 +225,11 @@ validation figures, the real-scan evaluation, and any `known_defects` —
 defects are recorded against the versions that carry them rather than quietly
 fixed forward, because people may be running those weights.
 
+It also refuses a word list that is not gzip, or that has no sidecar.
+
 Then hand the release to the library: see the `tetrak-hy-weights-release`
-skill in `tetrak-easyocr-armenian`, which pins the Hub revision and checksum.
+skill in `tetrak-easyocr-armenian`, which pins the Hub revision and the
+checksums of the weights and the word list.
 
 ---
 
@@ -272,13 +265,14 @@ Worth knowing before starting an eleven-hour run rather than an hour into one.
   `hy_char.txt` so `["hy"]` raises FileNotFoundError; the setting is inert for
   a custom model anyway.
 - **Real-crop labels inherit whatever the transcribers did.** Between v2 and
-  v3 the `։`→`:` confusion moved the *wrong* way, because some ASE
-  transcripts write the Armenian full stop as an ASCII colon and the fine-tune
-  learnt that from its labels. Harmless in the shipped path — `fold_script`
-  maps it back — but it is the clearest evidence that a real-crop fine-tune
-  teaches the model the transcribers' conventions along with the page's. Check
-  the confusion table for entries that got *worse*, not only for the cluster
-  you were aiming at.
-- **The Portmind quarantine.** Nothing from the CC BY-NC `portmind-armenian-ocr`
-  fork may enter this repository — no code, no annotations, no weights.
-  Re-implementing ideas is fine; copying expression is not.
+  v3 the `։`→`:` confusion moved the *wrong* way, because some transcripts
+  type the Armenian full stop as an ASCII colon and the fine-tune learnt that
+  from its labels. `wikisource.normalise_transcript` now labels a closing
+  colon in an Armenian word as `։`, but the lesson stands: a real-crop
+  fine-tune teaches the transcribers' conventions along with the page's.
+  Check the confusion table for entries that got *worse*, not only for the
+  cluster you were aiming at.
+- **A new volume of an evaluated work can reprint an evaluation page.** Run
+  `python scripts/check_eval_overlap.py` after harvesting it and before
+  training on it; it exits 1 and names any page not yet in
+  `OVERLAPPING_PAGES`.
