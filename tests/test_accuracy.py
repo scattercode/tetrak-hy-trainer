@@ -41,6 +41,15 @@ class TestCharacterSimilarity:
         reversed_words = "delta gamma beta alpha"
         assert character_similarity(reversed_words, words) < 0.6
 
+    def test_a_long_page_is_not_scored_on_its_rare_characters(self):
+        """difflib's autojunk, on by default, treats every character making up
+        over 1% of a string longer than 200 as junk -- on a page, most of the
+        alphabet -- and scored a near-perfect Armenian page at about 0.76."""
+        page = "Հայաստանի պատմության մասին գիրքը կարդացի երեկ երեկոյան։ " * 12
+        misread = page.replace("գիրքը", "գիրքր", 1)
+        assert len(page) > 200
+        assert character_similarity(misread, page) > 0.99
+
 
 class TestWordRecall:
     def test_every_word_found_scores_one(self):
@@ -62,3 +71,16 @@ class TestWordRecall:
 
     def test_an_empty_transcript_recalls_nothing(self):
         assert word_recall("", ARMENIAN) == 0.0
+
+
+class TestArmenianTranscriptConventions:
+    """Kept in step with Tetrak's copy of the metric (brief 013)."""
+
+    def test_full_stop_and_colon_are_equal(self):
+        assert normalise("բժշկի։") == normalise("բժշկի:")
+
+    def test_abbreviation_dot_and_full_stop_are_equal(self):
+        assert normalise("Ա․ Գրկ․") == normalise("Ա. Գրկ.")
+
+    def test_punctuation_only_tokens_are_not_words(self):
+        assert word_recall("term 274 other 275", "term - 274 other - 275") == 1.0

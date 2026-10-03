@@ -108,3 +108,20 @@ class TestWorkRegistry:
         ]
         for title in titles:
             assert heldout.held_out_pages(title) is not None, title
+
+
+class TestOverlappingPages:
+    """Pages printing an evaluation page's text stay out of training (brief 013)."""
+
+    TUMANYAN_5 = "Ինդեքս:Թումանյանի ԵԼԺ հ5.djvu"
+
+    def test_an_overlapping_page_is_kept_out_of_training(self) -> None:
+        assert heldout.page_is_held_out(self.TUMANYAN_5, 691)
+
+    def test_it_is_not_an_evaluation_page(self) -> None:
+        assert 691 not in heldout.held_out_pages(self.TUMANYAN_5)
+
+    def test_the_entry_names_one_volume_not_the_work(self) -> None:
+        assert not heldout.page_is_held_out("Ինդեքս:Թումանյանի ԵԼԺ հ10.djvu", 691)
+        assert not heldout.page_is_held_out(self.TUMANYAN_5, 430)
+        assert not heldout.page_is_held_out("Ինդեքս:Թումանյանի ԵԼԺ հ1.djvu", 691)

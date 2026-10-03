@@ -17,6 +17,12 @@ running headers/page numbers that the transcripts (correctly) omit, so
 character similarity carries a small insertion penalty and word recall
 none.
 
+Every backend's raw reading is saved beside the scores, as
+``<harvest-dir>/readings/<backend>/<page>.txt``. Until brief 013 only the
+scores were kept, so when the character metric turned out to be wrong
+(difflib's autojunk) nothing could be re-scored without re-running every
+engine for hours. With the readings on disk a metric change is a re-score.
+
 Run:
     python scripts/evaluate_baselines.py <harvest-dir>
 """
@@ -192,6 +198,9 @@ for name, fn in BACKENDS:
             rows.append([name, number, "", "", ""])
             continue
         elapsed = time.perf_counter() - started
+        reading = EVAL_DIR / "readings" / name / f"{number}.txt"
+        reading.parent.mkdir(parents=True, exist_ok=True)
+        reading.write_text(text, encoding="utf-8")
         sim = character_similarity(text, expected)
         rec = word_recall(text, expected)
         sims.append(sim)

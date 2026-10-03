@@ -267,6 +267,26 @@ _TRANSCRIPT_SUBSTITUTIONS = {
 }
 
 
+# The ASCII colon typed for the Armenian full stop. Not a plain entry in
+# the table above, because a colon is genuine print in a time ("10:30"),
+# a ratio or a Latin gloss; it is only the full stop when it sits in a
+# token that carries an Armenian letter -- the same scope tetrak_hy's
+# fold_script uses on the predicted side. Brief 013: the medical
+# encyclopedia's transcripts use it throughout, so real crops cut from
+# them taught ':' at every sentence end, and the fold then had to undo it.
+_ARMENIAN_TOKEN_COLON = re.compile(r"\S*[\u0531-\u0556\u0561-\u0587]\S*")
+
+
+# Only a colon ending the token, optionally before closing punctuation, is
+# the full stop: "բժշկի:" and "Հ.:" are, but the colon in "10:30-ին" -- a
+# time with an Armenian suffix -- is genuine print.
+_TERMINAL_COLON = re.compile(r":(?=[^\w]*$)")
+
+
+def _armenian_full_stops(text: str) -> str:
+    return _ARMENIAN_TOKEN_COLON.sub(lambda match: _TERMINAL_COLON.sub("։", match.group()), text)
+
+
 def normalise_transcript(text: str) -> str:
     """Fold transcriber substitutions onto what the page actually prints.
 
@@ -277,7 +297,7 @@ def normalise_transcript(text: str) -> str:
     """
     for source, replacement in _TRANSCRIPT_SUBSTITUTIONS.items():
         text = text.replace(source, replacement)
-    return text
+    return _armenian_full_stops(text)
 
 
 def index_to_file_title(index_title: str) -> str:

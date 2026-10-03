@@ -116,6 +116,16 @@ def build_line_samples(
     return candidates[:max_samples]
 
 
+def upper_case_line(line: str) -> str:
+    """*line* in capitals, as a headword or a title page prints it.
+
+    ``str.upper`` maps the ligature ``և`` to ``ԵՒ``, the traditional
+    spelling; the reformed-orthography editions this model reads print
+    ``ԵՎ``, so the ligature is spelled out first.
+    """
+    return line.replace("և", "եվ").upper()
+
+
 def render_corpus(
     run_dir: Path,
     samples: list[str],
@@ -124,8 +134,13 @@ def render_corpus(
     repeats: int,
     use_augment: bool,
     seed: int = 0,
+    names: tuple[str, str] = ("syn_train", "syn_val"),
 ) -> tuple[Path, int]:
     """Render train/val folders in the trainer's format; return (root, count).
+
+    *names* are the train and validation folder names under ``all_data/``,
+    so a second synthetic set (brief 013's all-caps lines) can sit beside
+    ``syn_train`` and be mixed in by ``select_data``.
 
     Validation gets the same rendering *and degradation* treatment —
     v0's crisp validation read 99.7% while real scans read 0.08, so a
@@ -154,8 +169,8 @@ def render_corpus(
     ]
 
     data_root = run_dir / "all_data"
-    train_dir = data_root / "syn_train"
-    val_dir = data_root / "syn_val"
+    train_dir = data_root / names[0]
+    val_dir = data_root / names[1]
     for directory in (train_dir, val_dir):
         directory.mkdir(parents=True, exist_ok=True)
 
@@ -184,6 +199,25 @@ def render_corpus(
         # synth.write_labels -- this cost v1 21% of its crops.
         synth.write_labels(directory, rows)
     return data_root, len(train_rows)
+
+
+def find_fonts() -> list[Path]:
+    """Every rendering face, with each one's charset gaps printed."""
+    # .tt* catches TTF and TTC; the GHEA faces are OTF, which Pillow reads
+    # just as happily and the original glob silently ignored.
+    font_dir = REPO / "runs" / "v0" / "fonts"
+    fonts = sorted([*font_dir.glob("*.tt*"), *font_dir.glob("*.otf")])
+    system_font = Path("/System/Library/Fonts/Supplemental/Mshtakan.ttc")
+    if system_font.exists():
+        fonts.append(system_font)
+    if not fonts:
+        raise SystemExit("no fonts found")
+    print(f"fonts: {[f.name for f in fonts]}", flush=True)
+    for font in fonts:
+        gaps = synth.missing_glyphs(str(font), charset.character_list())
+        if gaps:
+            print(f"  {font.name} has no glyph for: {sorted(gaps)!r}", flush=True)
+    return fonts
 
 
 def package(run_dir: Path, experiment: str) -> Path:
@@ -272,20 +306,7 @@ def main() -> int:
     samples = build_line_samples(harvest_dirs, args.max_samples, rng, args.line_tokens_max)
     print(f"line samples: {len(samples)}", flush=True)
 
-    # .tt* catches TTF and TTC; the GHEA faces are OTF, which Pillow reads
-    # just as happily and the original glob silently ignored.
-    font_dir = REPO / "runs" / "v0" / "fonts"
-    fonts = sorted([*font_dir.glob("*.tt*"), *font_dir.glob("*.otf")])
-    system_font = Path("/System/Library/Fonts/Supplemental/Mshtakan.ttc")
-    if system_font.exists():
-        fonts.append(system_font)
-    if not fonts:
-        raise SystemExit("no fonts found")
-    print(f"fonts: {[f.name for f in fonts]}", flush=True)
-    for font in fonts:
-        gaps = synth.missing_glyphs(str(font), charset.character_list())
-        if gaps:
-            print(f"  {font.name} has no glyph for: {sorted(gaps)!r}", flush=True)
+    fonts = find_fonts()
 
     sizes = tuple(s for s in (18, 22, 28, 36, 48, 64) if s >= args.min_size)
     data_root, crops = render_corpus(run_dir, samples, fonts, sizes, args.repeats, args.augment)
