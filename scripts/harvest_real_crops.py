@@ -364,7 +364,9 @@ def main() -> int:
     for position, page in enumerate(pages):
         split = "val" if args.val_every and position % args.val_every == 0 else "train"
         detections = detect_page(reader, page["image_path"])
-        truth = wikisource.normalise_transcript(page["text_path"].read_text(encoding="utf-8"))
+        truth = wikisource.normalise_transcript(
+            page["text_path"].read_text(encoding="utf-8"), page["index"]
+        )
         crops = align.align_page(
             detections,
             truth,
@@ -421,6 +423,7 @@ def main() -> int:
         # trainer's regex split keeps the quotation marks. See
         # synth.write_labels -- this cost v1 21% of its crops.
         synth.write_labels(folder, rows[split])
+        charset.stamp(folder)
 
     with (args.out / "crops.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(

@@ -109,7 +109,7 @@ def main() -> int:
             if page in excluded.get(source_slug(directory.name), ()):
                 continue
             read += 1
-            text = wikisource.normalise_transcript(text_file.read_text(encoding="utf-8"))
+            text = wikisource.normalise_transcript(text_file.read_text(encoding="utf-8"), index)
             for token in text.split():
                 word = _EDGES.sub("", token).lower()
                 if word and _ARMENIAN_LETTER.search(word):

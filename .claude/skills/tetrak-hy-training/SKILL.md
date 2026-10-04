@@ -22,6 +22,29 @@ from the synthetic sampler and from the word list. `harvest_real_crops.py`
 checks the harvest manifest before reading anything. If a guard fires, do not
 work around it.
 
+## Pending for the next run: charset v4
+
+Charset v4 (`<`, `>`, `³`, `±`; `num_class` 175 → 179) and the per-source
+angle-bracket fold landed on 2026-10-04 and have not been trained or
+published yet. They ship with whatever the next run is for. Delete this
+section once that model is released.
+
+- [ ] **Fresh synthetic pre-train** (step 5). v6 and every earlier checkpoint
+      has a 175-class head; `finetune_real.py` refuses them.
+- [ ] **Re-harvest every real-crop set** (step 6). Crops harvested under v3
+      carry `«` where the page prints `<`, and relabelling cannot restore it;
+      `finetune_real.py` refuses an unstamped `real_*` folder.
+- [ ] **Rebuild the word list** (step 9). It picks the change up on its own,
+      but only if it is rebuilt rather than reused from v6.
+- [ ] **Check the confusion table** (step 8) for `<` against `«`, and `³`
+      against `²` and `3`.
+- [ ] **`VERSIONS` entry** (step 10): record charset v4, the four additions,
+      and that the `<` fold changed (see `charset.py` and
+      `wikisource.PRINTED_ANGLE_BRACKETS`).
+- [ ] **Library release** (`tetrak-hy-weights-release` in
+      `tetrak-easyocr-armenian`): a new `num_class` is a new yaml, so the
+      packaged yaml and the pins move together.
+
 ---
 
 ## 1. Find material — census

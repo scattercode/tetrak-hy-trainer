@@ -115,7 +115,7 @@ def harvest(
             entry["revid"] = None
         else:
             wikitext, revid = client.page_wikitext(record.title)
-            cleaned = wikisource.clean_wikitext(wikitext)
+            cleaned = wikisource.clean_wikitext(wikitext, index_title)
             if not cleaned:
                 continue  # a blank or image-only page contributes nothing
             text_path.write_text(cleaned, encoding="utf-8")

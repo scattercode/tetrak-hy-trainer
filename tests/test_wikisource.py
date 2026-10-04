@@ -327,6 +327,33 @@ class TestNormaliseTranscript:
     def test_angle_brackets_become_guillemets(self) -> None:
         assert wikisource.normalise_transcript("<Ազգ> և <Պահակ>") == "«Ազգ» և «Պահակ»"
 
+    def test_an_abbreviated_quotation_still_becomes_guillemets(self) -> None:
+        assert wikisource.normalise_transcript("Կանտը <Տ․> տերմինն") == "Կանտը «Տ․» տերմինն"
+
+    def test_the_etymology_sign_is_left_alone(self) -> None:
+        """'<' is "derived from" in the encyclopedia's etymologies, spaced or
+        not -- these are from the held-out pages 110 and 113."""
+        text = "ԱՐՇԻՊԵԼԱԳ (<իտալ․ Arcipelag), (Arsenicum, < հուն, apa), [<ռուս. CПИД"
+        assert wikisource.normalise_transcript(text) == text
+
+    def test_a_critical_edition_keeps_its_editorial_brackets(self) -> None:
+        """Tumanyan's collected works print <> around the editor's
+        expansions; its quotations are already typed as « »."""
+        text = "ՕՐ<ԻՈՐԴ>.– Ոչ, ես այդ չեմ ասում «Ազգ» <1 անընթ.>"
+        assert wikisource.normalise_transcript(text, "Ինդեքս:Թումանյանի ԵԼԺ հ5.djvu") == text
+        assert "«ԻՈՐԴ»" in wikisource.normalise_transcript(text)  # any other source
+
+    def test_labels_can_keep_their_angle_brackets(self) -> None:
+        assert wikisource.normalise_transcript("<Ազգ>", angle_brackets_printed=True) == "<Ազգ>"
+
+    def test_clean_wikitext_passes_the_source_on(self) -> None:
+        cleaned = wikisource.clean_wikitext("օր<ինակ>", "Ինդեքս:Թումանյանի ԵԼԺ հ5.djvu")
+        assert cleaned == "օր<ինակ>"
+
+    def test_sound_changes_and_comparisons_are_left_alone(self) -> None:
+        text = "արջ<արչ, եա>է․ (v+m)>II, (< 10 սմ), х+1 < у"
+        assert wikisource.normalise_transcript(text) == text
+
     def test_minus_sign_becomes_an_en_dash(self) -> None:
         """U+2212 is a near-perfect homoglyph of the en dash, so it is
         normalised rather than admitted to the charset."""

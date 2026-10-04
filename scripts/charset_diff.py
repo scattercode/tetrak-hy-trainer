@@ -16,6 +16,7 @@ Run from the repo root:
 
 from __future__ import annotations
 
+import json
 import sys
 import unicodedata
 from pathlib import Path
@@ -38,8 +39,12 @@ def main() -> int:
         # samplers will actually meet, since they normalise transcriber
         # substitutions at read time. Only the residual costs training
         # data -- those tokens get dropped by the charset filter.
+        manifest = directory / "manifest.json"
+        index = (
+            json.loads(manifest.read_text(encoding="utf-8"))["index"] if manifest.exists() else ""
+        )
         raw = charset.strays(text)
-        residual = charset.strays(wikisource.normalise_transcript(text))
+        residual = charset.strays(wikisource.normalise_transcript(text, index))
         print(
             f"\n{directory} — {sum(residual.values())} strays after normalisation "
             f"({sum(raw.values())} raw, {len(residual)} distinct)"

@@ -209,7 +209,7 @@ _WIKILINK = re.compile(r"\[\[(?:[^|\]]*\|)?([^\]]*)\]\]")
 _EMPHASIS = re.compile(r"'{2,}")
 
 
-def clean_wikitext(text: str) -> str:
+def clean_wikitext(text: str, index_title: str = "") -> str:
     """Reduce a transcription page's wikitext to its plain page text.
 
     Strips the ProofreadPage ``<noinclude>`` header/footer (quality tag and
@@ -221,6 +221,9 @@ def clean_wikitext(text: str) -> str:
     Deliberately conservative: unfamiliar markup is stripped rather than
     interpreted, and whitespace is normalised per line, preserving the
     paragraph structure the transcribers encoded.
+
+    *index_title* names the page's source for :func:`normalise_transcript`,
+    which treats angle brackets differently in a critical edition.
     """
     text = _NOINCLUDE.sub("", text)
     text = _SECTION_TAG.sub("", text)
@@ -231,7 +234,7 @@ def clean_wikitext(text: str) -> str:
     text = _HTML_TAG.sub("", text)
     text = _EMPHASIS.sub("", text)
 
-    text = normalise_transcript(text)
+    text = normalise_transcript(text, index_title)
 
     lines = [re.sub(r"[ \t]+", " ", line).strip() for line in text.splitlines()]
     cleaned = "\n".join(lines)
@@ -251,10 +254,6 @@ def clean_wikitext(text: str) -> str:
 # "a{3piy£}"), not print, so the charset filter should keep dropping
 # those tokens. Cyrillic and Arabic stay out of scope.
 _TRANSCRIPT_SUBSTITUTIONS = {
-    # Angle brackets for guillemets: "<Ազգ> և <Պահակ>" where the page
-    # prints «Ազգ» և «Պահակ». 2,931 occurrences corpus-wide.
-    "<": "«",
-    ">": "»",
     # Minus sign and horizontal bar for dashes, in dialogue and glosses:
     # "− Էֆենտի", "acceleratio − արագացում". 10,770 occurrences, most of
     # them in the Western Armenian literary sources -- and U+2212 is a
@@ -287,16 +286,67 @@ def _armenian_full_stops(text: str) -> str:
     return _ARMENIAN_TOKEN_COLON.sub(lambda match: _TERMINAL_COLON.sub("։", match.group()), text)
 
 
-def normalise_transcript(text: str) -> str:
+# Angle brackets typed for guillemets: "<Ազգ> և <Պահակ>" where the page
+# prints «Ազգ» և «Պահակ». Not plain entries in the table above, because
+# the encyclopedia also prints a genuine '<' -- "derived from" in its
+# etymologies, "(< լատ․ pulpa", "(<հուն․ παράλλαξις" -- and both brackets
+# in sound changes ("արջ<արչ", "եա>է") and comparisons ("(< 10 սմ)",
+# "(v+m)>II"). Folding those taught the model to read the derivation sign
+# as a guillemet. A guillemet hugs its word on the inside, so a '<'
+# before whitespace or a '>' after it is print; so is a '<' opening an
+# abbreviation ("հուն․", "արչ,") when it is not itself after whitespace,
+# which keeps «Տ․» a quotation; so is a '>' with a letter or digit
+# straight after it, where a closing guillemet has a space or punctuation.
+_ANGLE_BRACKET = re.compile(
+    r"(?P<printed><(?!\S)|(?<=\S)<(?=[\u0531-\u0556\u0561-\u0587]+[\u2024.,])|(?<!\S)>|>(?=\w))|[<>]"
+)
+
+
+# Critical editions whose angle brackets are the editor's own print: the
+# expansion of an abbreviation in the manuscript ("օր<ինակ>",
+# "ՕՐ<ԻՈՐԴ>"), a supplied word or title ("<ՄԵԾ ՈՐԴԻՆ>"), an illegible
+# word ("<1 անընթ.>"), a cross-reference ("«Թատրոններ», <1>"). Their
+# quotations are already typed as « », so nothing here stands in for a
+# guillemet, and folding would teach the model the wrong shape for 787
+# printed brackets. Each checked against its scans: Tumanyan pages 522,
+# 552, 630 and 637; Baronian page 694.
+PRINTED_ANGLE_BRACKETS = frozenset(
+    {
+        "Ինդեքս:Թումանյանի ԵԼԺ հ5.djvu",
+        "Ինդեքս:Hagop Baronian, Collected works, vol. 10 "
+        "(Հակոբ Պարոնյան, Երկերի ժողովածու, հատոր 10-րդ).djvu",
+    }
+)
+
+
+def _guillemets(text: str) -> str:
+    return _ANGLE_BRACKET.sub(
+        lambda match: match.group("printed") or ("«" if match.group() == "<" else "»"), text
+    )
+
+
+def normalise_transcript(
+    text: str, index_title: str = "", *, angle_brackets_printed: bool = False
+) -> str:
     """Fold transcriber substitutions onto what the page actually prints.
 
     Applied by :func:`clean_wikitext` for new harvests, and again at read
     time by the samplers, so transcripts harvested before this existed
     get the same treatment without re-fetching several thousand pages.
     Idempotent, which is what makes that safe.
+
+    Args:
+        text: Transcript text.
+        index_title: The ``Ինդեքս:`` page the text came from. A source in
+            :data:`PRINTED_ANGLE_BRACKETS` keeps its angle brackets.
+        angle_brackets_printed: Keep angle brackets whatever the source --
+            for text already normalised whose source is no longer known,
+            such as a dataset's labels.
     """
     for source, replacement in _TRANSCRIPT_SUBSTITUTIONS.items():
         text = text.replace(source, replacement)
+    if not (angle_brackets_printed or index_title in PRINTED_ANGLE_BRACKETS):
+        text = _guillemets(text)
     return _armenian_full_stops(text)
 
 

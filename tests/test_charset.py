@@ -65,7 +65,15 @@ def test_additions_are_appended_in_version_order() -> None:
     is a prefix of every later one and the ``ա`` index test_order_is_stable
     pins is never disturbed by an append."""
     characters = charset.character_list(include_space=False)
-    assert characters.endswith(charset.V2_ADDITIONS + charset.V3_ADDITIONS)
+    assert characters.endswith(charset.V2_ADDITIONS + charset.V3_ADDITIONS + charset.V4_ADDITIONS)
+
+
+def test_v4_additions_are_present() -> None:
+    """The angle brackets the encyclopedias and critical editions print,
+    and the scientific superscript three and plus-minus."""
+    characters = charset.character_list()
+    for character in "<>³±":
+        assert character in characters
 
 
 def test_strays_counts_out_of_charset_characters() -> None:
@@ -96,8 +104,24 @@ def test_v3_additions_are_present() -> None:
 
 def test_transcriber_substitutions_stay_out_of_the_charset() -> None:
     """U+2212 would give the model a new homoglyph to confuse with the
-    en dash; angle brackets are guillemets in disguise. Both are
-    normalised in wikisource.normalise_transcript instead."""
+    en dash, so it is normalised in wikisource.normalise_transcript
+    instead. (Angle brackets were here until v4: the scans showed most of
+    them are print, not guillemets in disguise.)"""
     characters = charset.character_list()
     assert "−" not in characters
-    assert "<" not in characters and ">" not in characters
+
+
+def test_a_stamped_folder_matches_the_current_charset(tmp_path) -> None:
+    charset.stamp(tmp_path)
+    assert charset.stamp_matches(tmp_path)
+
+
+def test_an_unstamped_or_older_folder_does_not_match(tmp_path) -> None:
+    """Real crops harvested before v4 carry no stamp; one made under an
+    older charset carries a different list. Both must be refused."""
+    assert not charset.stamp_matches(tmp_path)
+    (tmp_path / charset.STAMP_FILE).write_text(
+        charset.character_list().removesuffix(charset.V4_ADDITIONS + " ") + " ",
+        encoding="utf-8",
+    )
+    assert not charset.stamp_matches(tmp_path)

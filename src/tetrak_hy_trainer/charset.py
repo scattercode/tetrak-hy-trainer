@@ -21,6 +21,14 @@ Composition
 - Western digits and basic Latin, because 19th–20th century Armenian print
   mixes in Latin names, numerals and abbreviations.
 - Common punctuation shared across scripts.
+- v4 additions (:data:`V4_ADDITIONS`): the angle brackets, superscript
+  three and the plus-minus sign -- the notation of the encyclopedias and
+  the critical editions. v3 treated every angle bracket as a typed
+  guillemet; checking the scans showed most are print: the encyclopedia's
+  "derived from" sign in etymologies and sound changes, and the editorial
+  brackets of Tumanyan's and Baronian's collected works. The guillemet fold
+  in :func:`tetrak_hy_trainer.wikisource.normalise_transcript` now leaves
+  those alone, so the charset needs a class for them.
 - v3 additions (:data:`V3_ADDITIONS`): the ellipsis, square brackets,
   the numero sign and superscript two — found by diffing the corpus
   brief 012 widened to, and all genuinely printed. The same diff found
@@ -55,6 +63,7 @@ file, like any other charset change.
 from __future__ import annotations
 
 from collections import Counter
+from pathlib import Path
 
 ARMENIAN_UPPER = "".join(chr(code) for code in range(0x0531, 0x0556 + 1))  # Ա–Ֆ
 ARMENIAN_LOWER = "".join(chr(code) for code in range(0x0561, 0x0586 + 1))  # ա–ֆ
@@ -89,6 +98,18 @@ V2_ADDITIONS = "․°"
 # pure append and the ordering tests keep their meaning.
 V3_ADDITIONS = "…[]№²"
 
+# v4 additions, from the scans rather than the transcripts alone:
+#   < > 2,421  the encyclopedia's "derived from" sign ("(< լատ․ pulpa",
+#              "արջ<արչ") and comparisons, and the critical editions'
+#              editorial brackets ("օր<ինակ>", "<1 անընթ.>") -- counted
+#              after the guillemet fold, so only the printed ones
+#   ³    126  superscript three, in volumes and densities ("գ/սմ³")
+#   ±     62  plus-minus, in measurements ("3500±450 գ")
+# Appended, like V3_ADDITIONS. Every GHEA and Arnamu face draws all four;
+# Noto lacks ³ and ± as it already lacks ², and the renderer excludes a
+# face from any line it cannot draw.
+V4_ADDITIONS = "<>³±"
+
 # Settled at spike time against what the EasyOCR trainer actually expects,
 # and baked into every released model since v0. Not a switch to flip: see
 # the module docstring.
@@ -118,6 +139,7 @@ def character_list(include_space: bool | None = None) -> str:
         + COMMON_PUNCTUATION
         + V2_ADDITIONS
         + V3_ADDITIONS
+        + V4_ADDITIONS
     )
     if include_space:
         characters += " "
@@ -153,3 +175,26 @@ def strays(text: str) -> Counter[str]:
     """
     allowed = set(character_list(include_space=True))
     return Counter(c for c in text if c not in allowed and not c.isspace())
+
+
+# Written beside a dataset's labels.csv by the code that labels it.
+STAMP_FILE = "charset.txt"
+
+
+def stamp(folder: Path) -> None:
+    """Record the charset *folder*'s labels were made under.
+
+    Real-crop labels are frozen at harvest: a later charset or
+    normalisation change does not reach them, and ``relabel_dataset.py``
+    cannot restore a character the old normaliser folded away. Charset v4
+    is the case in point -- crops harvested under v3 carry « where the page
+    prints <. The stamp lets the fine-tune refuse them rather than train
+    on them unnoticed.
+    """
+    (folder / STAMP_FILE).write_text(character_list(), encoding="utf-8")
+
+
+def stamp_matches(folder: Path) -> bool:
+    """Whether *folder* was labelled under the current charset."""
+    path = folder / STAMP_FILE
+    return path.exists() and path.read_text(encoding="utf-8") == character_list()
