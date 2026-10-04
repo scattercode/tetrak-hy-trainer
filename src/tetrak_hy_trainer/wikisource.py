@@ -295,10 +295,17 @@ def _armenian_full_stops(text: str) -> str:
 # as a guillemet. A guillemet hugs its word on the inside, so a '<'
 # before whitespace or a '>' after it is print; so is a '<' opening an
 # abbreviation ("հուն․", "արչ,") when it is not itself after whitespace,
-# which keeps «Տ․» a quotation; so is a '>' with a letter or digit
-# straight after it, where a closing guillemet has a space or punctuation.
+# which keeps «Տ․» a quotation; so is a '<' between two Armenian words
+# when the right-hand one ends without a closing '>' -- a sound change at
+# the end of a phrase, "արջ<արչ", where a quoted word would be closed --
+# and so is a '>' with a letter or digit straight after it, where a
+# closing guillemet has a space or punctuation.
+_ARMENIAN_LETTERS = "\u0531-\u0556\u0561-\u0587"
 _ANGLE_BRACKET = re.compile(
-    r"(?P<printed><(?!\S)|(?<=\S)<(?=[\u0531-\u0556\u0561-\u0587]+[\u2024.,])|(?<!\S)>|>(?=\w))|[<>]"
+    r"(?P<printed><(?!\S)"
+    rf"|(?<=\S)<(?=[{_ARMENIAN_LETTERS}]+[\u2024.,])"
+    rf"|(?<=[{_ARMENIAN_LETTERS}])<(?=[{_ARMENIAN_LETTERS}]+(?![\w>]))"
+    r"|(?<!\S)>|>(?=\w))|[<>]"
 )
 
 
@@ -317,6 +324,22 @@ PRINTED_ANGLE_BRACKETS = frozenset(
         "(Հակոբ Պարոնյան, Երկերի ժողովածու, հատոր 10-րդ).djvu",
     }
 )
+
+
+# Which version of the transcript cleaning harvest text on disk was written
+# with, recorded per page in the harvest manifest as "cleaning". Bump it when
+# clean_wikitext or normalise_transcript changes in a way read-time
+# normalisation cannot apply to text already saved -- when an older version
+# threw away something the new one keeps. Pages from before the field
+# existed count as 1.
+#   2  angle brackets the page prints are no longer folded to guillemets
+#      (charset v4). Text cleaned at 1 has lost them for good.
+TRANSCRIPT_CLEANING = 2
+
+
+def cleaning_of(entry: dict) -> int:
+    """The cleaning version a harvest manifest entry's text was written with."""
+    return entry.get("cleaning", 1)
 
 
 def _guillemets(text: str) -> str:

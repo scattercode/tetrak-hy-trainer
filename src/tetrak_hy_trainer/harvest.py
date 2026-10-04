@@ -78,12 +78,17 @@ def harvest(
     images: bool = False,
     image_width: int = 2048,
     pages: set[int] | None = None,
+    refresh_stale: bool = False,
 ) -> list[dict]:
     """Harvest *index_title* into *out_dir*; return the manifest entries.
 
     Args:
         pages: Only harvest these page numbers, as from
             :func:`parse_page_spec`. ``None`` takes them all, in order.
+        refresh_stale: Fetch again, rather than resume past, any page whose
+            text was cleaned by an older
+            :data:`~tetrak_hy_trainer.wikisource.TRANSCRIPT_CLEANING`. The
+            only way to recover what an older cleaning threw away.
     """
     text_dir = out_dir / "text"
     text_dir.mkdir(parents=True, exist_ok=True)
@@ -92,6 +97,8 @@ def harvest(
         image_dir.mkdir(parents=True, exist_ok=True)
 
     file_title = wikisource.index_to_file_title(index_title)
+    manifest_path = out_dir / "manifest.json"
+    previous = _previous_entries(manifest_path)
     manifest: list[dict] = []
     harvested = 0
 
@@ -110,9 +117,14 @@ def harvest(
             "text": str(text_path.relative_to(out_dir)),
         }
 
-        if text_path.exists():
-            # Resuming: keep the text as it is and fetch no wikitext.
+        earlier = previous.get(record.page_number, {})
+        stale = wikisource.cleaning_of(earlier) < wikisource.TRANSCRIPT_CLEANING
+        if text_path.exists() and not (refresh_stale and stale):
+            # Resuming: keep the text as it is and fetch no wikitext. It
+            # keeps the cleaning version it was written with, so a stale
+            # page stays visibly stale.
             entry["revid"] = None
+            entry["cleaning"] = wikisource.cleaning_of(earlier)
         else:
             wikitext, revid = client.page_wikitext(record.title)
             cleaned = wikisource.clean_wikitext(wikitext, index_title)
@@ -120,6 +132,7 @@ def harvest(
                 continue  # a blank or image-only page contributes nothing
             text_path.write_text(cleaned, encoding="utf-8")
             entry["revid"] = revid
+            entry["cleaning"] = wikisource.TRANSCRIPT_CLEANING
 
         # Outside the resume branch on purpose. The volumes harvested for
         # v0 and v1 were taken text-only -- synthesis needs corpus text and
@@ -141,7 +154,6 @@ def harvest(
         harvested += 1
         print(f"  [{harvested}] p{record.page_number} q{record.quality} {text_path.name}")
 
-    manifest_path = out_dir / "manifest.json"
     _assert_same_work(manifest_path, index_title)
     if not manifest:
         raise HarvestError(
@@ -203,6 +215,14 @@ def _assert_same_work(manifest_path: Path, index_title: str) -> None:
         )
 
 
+def _previous_entries(manifest_path: Path) -> dict[int, dict]:
+    """The pages an existing manifest records, by page number."""
+    if not manifest_path.exists():
+        return {}
+    previous = json.loads(manifest_path.read_text(encoding="utf-8"))
+    return {entry["page_number"]: entry for entry in previous.get("pages", [])}
+
+
 def _merged_with_existing(manifest_path: Path, entries: list[dict]) -> list[dict]:
     """Fold *entries* into any manifest already at *manifest_path*.
 
@@ -213,11 +233,7 @@ def _merged_with_existing(manifest_path: Path, entries: list[dict]) -> list[dict
     have cut its 717-page record down to 60. Pages visited this time win;
     pages not visited are kept as they were.
     """
-    existing: dict[int, dict] = {}
-    if manifest_path.exists():
-        previous = json.loads(manifest_path.read_text(encoding="utf-8"))
-        existing = {entry["page_number"]: entry for entry in previous.get("pages", [])}
-
+    existing = _previous_entries(manifest_path)
     existing.update({entry["page_number"]: entry for entry in entries})
     return sorted(existing.values(), key=lambda item: item["page_number"])
 
@@ -241,6 +257,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--images", action="store_true", help="download page scans too")
     parser.add_argument("--image-width", type=int, default=2048)
+    parser.add_argument(
+        "--refresh-stale",
+        action="store_true",
+        help="fetch again any page whose text an older transcript cleaning wrote",
+    )
     args = parser.parse_args(argv)
 
     client = WikisourceClient()
@@ -253,6 +274,7 @@ def main(argv: list[str] | None = None) -> int:
         images=args.images,
         image_width=args.image_width,
         pages=parse_page_spec(args.pages) if args.pages else None,
+        refresh_stale=args.refresh_stale,
     )
     print(f"Harvested {len(manifest)} page(s) into {args.out}")
     return 0 if manifest else 1

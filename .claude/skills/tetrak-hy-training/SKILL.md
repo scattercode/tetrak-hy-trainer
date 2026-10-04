@@ -29,6 +29,14 @@ angle-bracket fold landed on 2026-10-04 and have not been trained or
 published yet. They ship with whatever the next run is for. Delete this
 section once that model is released.
 
+- [ ] **Refresh every harvest's transcripts first.** Harvest text is saved
+      after cleaning, and cleaning 1 folded every printed `<` to `«` for good;
+      a plain re-run resumes past it. Pages now record their `cleaning`, and
+      `python -m tetrak_hy_trainer.harvest --index … --out … --refresh-stale`
+      fetches the stale ones again. Do every directory under `runs/harvest/`,
+      `runs/v0/harvest` and `runs/v1/harvest-*`: the crop harvester refuses
+      stale pages, and the synthetic sampler and word list, which do not,
+      would otherwise never see a printed `<`.
 - [ ] **Fresh synthetic pre-train** (step 5). v6 and every earlier checkpoint
       has a 175-class head; `finetune_real.py` refuses them.
 - [ ] **Re-harvest every real-crop set** (step 6). Crops harvested under v3

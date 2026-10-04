@@ -169,6 +169,7 @@ def load_pages(harvest_dirs: list[Path]) -> tuple[list[str], list[dict]]:
         index_titles.append(index_title)
 
         volume = heldout.volume_of(index_title)
+        stale: list[int] = []
         for entry in manifest["pages"]:
             # Per-page hold-outs (brief 012's registry): an evaluation
             # slice inside an otherwise-trainable work never becomes crops.
@@ -177,6 +178,13 @@ def load_pages(harvest_dirs: list[Path]) -> tuple[list[str], list[dict]]:
             image = harvest_dir / "images" / f"{entry['page_number']}.jpg"
             text = harvest_dir / entry["text"]
             if image.exists() and text.exists():
+                # Text an older cleaning wrote has lost characters for good
+                # (cleaning 1 folded printed '<' to '«'), and read-time
+                # normalisation cannot put them back. Crops cut against it
+                # would be mislabelled and still stamped current.
+                if wikisource.cleaning_of(entry) < wikisource.TRANSCRIPT_CLEANING:
+                    stale.append(entry["page_number"])
+                    continue
                 pages.append(
                     {
                         **entry,
@@ -187,6 +195,14 @@ def load_pages(harvest_dirs: list[Path]) -> tuple[list[str], list[dict]]:
                         "index": index_title,
                     }
                 )
+        if stale:
+            raise ValueError(
+                f"{harvest_dir}: {len(stale)} page(s) with scans, e.g. {stale[:5]}, have text "
+                "cleaned before the current transcript cleaning, which cannot be undone. "
+                "Fetch them again, then re-run:\n"
+                f"    python -m tetrak_hy_trainer.harvest --index '{index_title}' "
+                f"--out {harvest_dir} --refresh-stale"
+            )
 
     pages.sort(key=lambda page: (page["source"], page["page_number"]))
     return index_titles, pages

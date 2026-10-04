@@ -354,6 +354,16 @@ class TestNormaliseTranscript:
         text = "արջ<արչ, եա>է․ (v+m)>II, (< 10 սմ), х+1 < у"
         assert wikisource.normalise_transcript(text) == text
 
+    def test_a_sound_change_with_nothing_after_it_is_left_alone(self) -> None:
+        """The case above survives only because of its comma. A sound
+        change ending a phrase, or the text, must keep its '<' too."""
+        assert wikisource.normalise_transcript("արջ<արչ") == "արջ<արչ"
+        assert wikisource.normalise_transcript("արջ<արչ ու") == "արջ<արչ ու"
+
+    def test_a_quoted_word_against_a_word_is_still_a_quotation(self) -> None:
+        """What tells a sound change from a quotation is the closing '>'."""
+        assert wikisource.normalise_transcript("ասաց<Ազգ> և") == "ասաց«Ազգ» և"
+
     def test_minus_sign_becomes_an_en_dash(self) -> None:
         """U+2212 is a near-perfect homoglyph of the en dash, so it is
         normalised rather than admitted to the charset."""

@@ -25,6 +25,8 @@ from pathlib import Path
 
 import pytest
 
+from tetrak_hy_trainer import wikisource
+
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "harvest_real_crops.py"
 
 
@@ -40,7 +42,13 @@ def script():
     return load_script()
 
 
-def make_harvest(root: Path, name: str, index_title: str, page_numbers: list[int]) -> Path:
+def make_harvest(
+    root: Path,
+    name: str,
+    index_title: str,
+    page_numbers: list[int],
+    cleaning: int | None = wikisource.TRANSCRIPT_CLEANING,
+) -> Path:
     directory = root / name
     (directory / "text").mkdir(parents=True)
     (directory / "images").mkdir()
@@ -48,7 +56,10 @@ def make_harvest(root: Path, name: str, index_title: str, page_numbers: list[int
     for number in page_numbers:
         (directory / "text" / f"{number}.txt").write_text("բովանդակություն", encoding="utf-8")
         (directory / "images" / f"{number}.jpg").write_bytes(b"")
-        entries.append({"page_number": number, "text": f"text/{number}.txt", "revid": 1})
+        entry = {"page_number": number, "text": f"text/{number}.txt", "revid": 1}
+        if cleaning is not None:
+            entry["cleaning"] = cleaning
+        entries.append(entry)
     (directory / "manifest.json").write_text(
         json.dumps({"index": index_title, "min_quality": 3, "pages": entries}, ensure_ascii=False),
         encoding="utf-8",
@@ -130,3 +141,17 @@ def test_the_slug_is_safe_for_the_labels_file(script) -> None:
 
     assert "," not in slug
     assert " " not in slug
+
+
+def test_text_from_an_older_cleaning_is_refused(script, tmp_path) -> None:
+    """Crops cut against text that has lost characters are mislabelled.
+
+    Cleaning 1 folded every printed '<' to '«', and nothing at read time
+    can put it back, so the loader must stop rather than let the crops
+    through to be stamped with the current charset. A manifest from
+    before the field existed counts as cleaning 1.
+    """
+    stale = make_harvest(tmp_path, "otyan-works", "Ինդեքս:… Yervand Otyan ….djvu", [100], None)
+
+    with pytest.raises(ValueError, match="--refresh-stale"):
+        script.load_pages([stale])
