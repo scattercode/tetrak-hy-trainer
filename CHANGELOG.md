@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-10-05
+
+### Changed
+
+- Bump fonttools from 4.63.0 to 4.66.0 (#21)
+- Bump pandas from 3.0.5 to 3.0.6 (#20)
+- Bump ruff from 0.16.5 to 0.16.8 (#18)
+- Bump torch from 2.13.0 to 2.14.0 (#15)
+- Bump actions/download-artifact from 7 to 8 (#13)
+- Bring CLAUDE.md and the training skill up to date (#24)
+- Charset v4 keeps the angle brackets the page prints (#29)
+
 ## [0.6.1] - 2026-10-03
 
 ### Changed
