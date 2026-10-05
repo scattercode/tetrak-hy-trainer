@@ -78,7 +78,9 @@ def clean_token_runs(harvest_dirs: list[Path]) -> list[list[str]]:
             # thousand pages were harvested before the substitutions were
             # found, and re-fetching them to fix a character swap would be
             # discourteous. Idempotent, so new harvests are unaffected.
-            page_text = wikisource.normalise_transcript(text_file.read_text(encoding="utf-8"))
+            page_text = wikisource.normalise_transcript(
+                text_file.read_text(encoding="utf-8"), index_title
+            )
             for token in page_text.split():
                 if 1 <= len(token) <= 24 and set(token) <= allowed:
                     current.append(token)

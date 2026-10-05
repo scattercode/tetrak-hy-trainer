@@ -46,6 +46,8 @@ SHINGLE = 8
 
 
 def shingles(text: str) -> set[tuple[str, ...]]:
+    # No index title, deliberately: the same rule on both sides, so a
+    # reprint is not missed because its edition prints angle brackets.
     words = wikisource.normalise_transcript(text).lower().split()
     return {tuple(words[i : i + SHINGLE]) for i in range(len(words) - SHINGLE + 1)}
 

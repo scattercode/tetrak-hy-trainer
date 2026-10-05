@@ -47,7 +47,13 @@ def main() -> int:
     destination.mkdir(parents=True)
     for filename, _ in rows:
         os.link(source / filename, destination / filename)
-    relabelled = [(filename, wikisource.normalise_transcript(label)) for filename, label in rows]
+    # A label has lost its source, and any angle bracket still in one
+    # survived its source's normalisation on purpose (before charset v4 the
+    # charset filter dropped them all), so it is kept rather than folded.
+    relabelled = [
+        (filename, wikisource.normalise_transcript(label, angle_brackets_printed=True))
+        for filename, label in rows
+    ]
     changed = sum(old != new for (_, old), (_, new) in zip(rows, relabelled, strict=True))
     synth.write_labels(destination, relabelled)
     print(f"{len(rows)} crops linked into {destination}; {changed} labels changed")

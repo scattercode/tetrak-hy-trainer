@@ -169,6 +169,7 @@ def load_pages(harvest_dirs: list[Path]) -> tuple[list[str], list[dict]]:
         index_titles.append(index_title)
 
         volume = heldout.volume_of(index_title)
+        stale: list[int] = []
         for entry in manifest["pages"]:
             # Per-page hold-outs (brief 012's registry): an evaluation
             # slice inside an otherwise-trainable work never becomes crops.
@@ -177,6 +178,13 @@ def load_pages(harvest_dirs: list[Path]) -> tuple[list[str], list[dict]]:
             image = harvest_dir / "images" / f"{entry['page_number']}.jpg"
             text = harvest_dir / entry["text"]
             if image.exists() and text.exists():
+                # Text an older cleaning wrote has lost characters for good
+                # (cleaning 1 folded printed '<' to '«'), and read-time
+                # normalisation cannot put them back. Crops cut against it
+                # would be mislabelled and still stamped current.
+                if wikisource.cleaning_of(entry) < wikisource.TRANSCRIPT_CLEANING:
+                    stale.append(entry["page_number"])
+                    continue
                 pages.append(
                     {
                         **entry,
@@ -187,6 +195,14 @@ def load_pages(harvest_dirs: list[Path]) -> tuple[list[str], list[dict]]:
                         "index": index_title,
                     }
                 )
+        if stale:
+            raise ValueError(
+                f"{harvest_dir}: {len(stale)} page(s) with scans, e.g. {stale[:5]}, have text "
+                "cleaned before the current transcript cleaning, which cannot be undone. "
+                "Fetch them again, then re-run:\n"
+                f"    python -m tetrak_hy_trainer.harvest --index '{index_title}' "
+                f"--out {harvest_dir} --refresh-stale"
+            )
 
     pages.sort(key=lambda page: (page["source"], page["page_number"]))
     return index_titles, pages
@@ -364,7 +380,9 @@ def main() -> int:
     for position, page in enumerate(pages):
         split = "val" if args.val_every and position % args.val_every == 0 else "train"
         detections = detect_page(reader, page["image_path"])
-        truth = wikisource.normalise_transcript(page["text_path"].read_text(encoding="utf-8"))
+        truth = wikisource.normalise_transcript(
+            page["text_path"].read_text(encoding="utf-8"), page["index"]
+        )
         crops = align.align_page(
             detections,
             truth,
@@ -421,6 +439,7 @@ def main() -> int:
         # trainer's regex split keeps the quotation marks. See
         # synth.write_labels -- this cost v1 21% of its crops.
         synth.write_labels(folder, rows[split])
+        charset.stamp(folder)
 
     with (args.out / "crops.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(

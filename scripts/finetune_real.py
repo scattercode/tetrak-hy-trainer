@@ -62,7 +62,30 @@ sys.path.insert(0, str(REPO / "scripts"))
 
 from train_synthetic import evaluate_pages, package  # noqa: E402
 
-from tetrak_hy_trainer import train_config  # noqa: E402
+from tetrak_hy_trainer import charset, train_config  # noqa: E402
+
+
+def ctc_width(checkpoint: Path) -> int:
+    """The output width of a checkpoint's CTC head: its parent's num_class."""
+    import torch
+
+    weights = torch.load(checkpoint, map_location="cpu", weights_only=True)
+    return next(v.shape[0] for k, v in weights.items() if k.endswith("Prediction.weight"))
+
+
+def require_current_labels(folder: Path) -> None:
+    """Refuse real crops labelled under an older charset.
+
+    Their labels are frozen at harvest, and ``relabel_dataset.py`` cannot
+    restore a character an older normaliser folded away -- crops harvested
+    under charset v3 carry « where the page prints <. Synthetic sets are
+    rendered by the run that uses them, so only real crops are checked.
+    """
+    if folder.name.startswith("real") and not charset.stamp_matches(folder):
+        raise SystemExit(
+            f"{folder} was labelled under an older charset, or before labels were "
+            "stamped. Harvest the real crops again with harvest_real_crops.py."
+        )
 
 
 def count_labels(folder: Path) -> int:
@@ -118,6 +141,19 @@ def main() -> int:
     if not saved_model.exists():
         raise SystemExit(f"no checkpoint at {saved_model}")
 
+    # A fine-tune inherits its parent's charset with the CTC head's width,
+    # so a parent from an older charset can neither emit the new classes
+    # nor match the yaml it would be packaged with. Charset v4 retired v6
+    # and every model before it: the next model starts from a fresh
+    # synthetic pre-train.
+    width = ctc_width(saved_model)
+    if width != charset.num_class():
+        raise SystemExit(
+            f"{saved_model} has a {width}-class head but the charset now has "
+            f"{charset.num_class()}. Pre-train under the current charset "
+            "(train_synthetic.py) and fine-tune from that."
+        )
+
     selected = args.select_data.split("-")
     ratios = args.batch_ratio.split("-")
     if len(selected) != len(ratios):
@@ -135,7 +171,9 @@ def main() -> int:
                 f"one root the trainer is given -- harvest real crops into {data_root} "
                 f"so they sit beside the synthetic ones."
             )
+        require_current_labels(folder)
         print(f"{name}: {count} crops", flush=True)
+    require_current_labels(valid_data)
     print(f"validating on {valid_data} ({count_labels(valid_data)} crops)", flush=True)
 
     config = train_config.build_config(
