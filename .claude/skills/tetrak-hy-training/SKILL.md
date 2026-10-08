@@ -68,6 +68,19 @@ proofread pages down to zero. For promising indexes it also probes the native
 scan width: **ASE volume 1 is 1920 px where volumes 2–6 are 3840**, which
 matters for crop detail.
 
+```bash
+.venv/bin/python scripts/orthography_census.py            # read four pages per index
+.venv/bin/python scripts/orthography_census.py --report   # classical and mixed indexes
+```
+
+Says which orthography each well-covered index is in, from the page text.
+Titles cannot: Kajaznuni's classical text is titled with a reformed `և`, and
+the Soviet editions of Western authors are reset in reformed spelling. The
+marker is free-standing `ւ` outside `ու` (classical pages 15–30 per thousand
+letters, reformed under 1); the `եւ`/`և` habit is per press and decides
+nothing. Grabar verse in a modern edition reads as classical too — check the
+author's century before harvesting a "classical" tagh collection.
+
 ## 2. Harvest pages
 
 ```bash
@@ -82,6 +95,10 @@ engine's mistakes.
 
 - **`--pages`, not `--limit`, for front matter.** Volume 1 opens with Russian
   title pages and a preface; entries start around page 20.
+- **Verse pages are wrapped in `{{Poemx||<poem>…}}`.** Until cleaning 3
+  (2026-10-08) the template stripper took the whole page with the wrapper and
+  every poetry index harvested as empty, silently. Harvests taken before then
+  have no verse: `--refresh-stale` refetches those pages.
 - **`--image-width 3840`** matches the evaluation scans, so crops carry the
   same detail per character as the material the model is scored on.
 - Re-runs are incremental. Adding `--images` to a harvest taken text-only tops
