@@ -205,6 +205,12 @@ _REF = re.compile(r"<ref[^>]*>.*?</ref>|<ref[^>]*/>", re.DOTALL)
 _HTML_TAG = re.compile(r"</?[a-zA-Z][^>]*>")
 # Innermost-first template removal; applied repeatedly for nesting.
 _TEMPLATE = re.compile(r"\{\{[^{}]*\}\}")
+# A template whose body is a <poem> block, such as {{Poemx||<poem>…</poem>}}
+# on hy.wikisource's verse pages. Templates are stripped whole (below), so
+# without this the entire page -- which is the poem -- went with the
+# wrapper, and every poetry index harvested as empty: Varoujan, Terian,
+# Charents vols. 2-3, Tsaturyan, Toranian's verse. Keep the poem's text.
+_POEM_TEMPLATE = re.compile(r"\{\{[^{}<]*<poem>(.*?)</poem>[^{}]*\}\}", re.DOTALL)
 _WIKILINK = re.compile(r"\[\[(?:[^|\]]*\|)?([^\]]*)\]\]")
 _EMPHASIS = re.compile(r"'{2,}")
 
@@ -228,6 +234,7 @@ def clean_wikitext(text: str, index_title: str = "") -> str:
     text = _NOINCLUDE.sub("", text)
     text = _SECTION_TAG.sub("", text)
     text = _REF.sub("", text)
+    text = _POEM_TEMPLATE.sub(r"\1", text)
     while _TEMPLATE.search(text):
         text = _TEMPLATE.sub("", text)
     text = _WIKILINK.sub(r"\1", text)
@@ -334,7 +341,10 @@ PRINTED_ANGLE_BRACKETS = frozenset(
 # existed count as 1.
 #   2  angle brackets the page prints are no longer folded to guillemets
 #      (charset v4). Text cleaned at 1 has lost them for good.
-TRANSCRIPT_CLEANING = 2
+#   3  verse inside a {{Poemx|<poem>…</poem>}} wrapper is kept (brief 014).
+#      Cleaning 1 and 2 stripped it with the template, so a poetry page
+#      saved earlier is empty or missing its verse.
+TRANSCRIPT_CLEANING = 3
 
 
 def cleaning_of(entry: dict) -> int:

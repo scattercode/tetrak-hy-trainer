@@ -50,6 +50,22 @@ class TestCleanWikitext:
     def test_removes_templates_including_nested(self) -> None:
         assert clean_wikitext("ա {{կաղապար|{{ներդիր}}}} բ") == "ա բ"
 
+    def test_keeps_verse_wrapped_in_a_poem_template(self) -> None:
+        # hy.wikisource's verse pages wrap the whole page in {{Poemx}}, with
+        # {{Տող|n}} line numbers inside; the wrapper went, and took the poem.
+        page = (
+            '<noinclude><pagequality level="3" user="x" /></noinclude>'
+            "{{Poemx||<poem>{{Տող|224}}Հողը կըրծող ժողովուրդն է, ցեխին մեջ\n"
+            "{{Տող|226—227}}Ուրիշներուն դըղյակ շինող խուժա՜նն է՝\n"
+            "Որ ոտքի միակ ոստումով</poem>}}"
+        )
+        cleaned = clean_wikitext(page)
+        assert cleaned.splitlines() == [
+            "Հողը կըրծող ժողովուրդն է, ցեխին մեջ",
+            "Ուրիշներուն դըղյակ շինող խուժա՜նն է՝",
+            "Որ ոտքի միակ ոստումով",
+        ]
+
     def test_keeps_wikilink_display_text(self) -> None:
         assert clean_wikitext("[[Թիրախ|ցուցադրվող]] տեքստ") == "ցուցադրվող տեքստ"
         assert clean_wikitext("[[Պարզ հղում]]") == "Պարզ հղում"
