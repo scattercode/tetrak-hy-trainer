@@ -94,6 +94,11 @@ WORK_PAGES: dict[str, frozenset[int]] = {
     "National Bigshots": frozenset({25, 38, 50, 64, 77, 89, 100, 116, 130, 152}),
     # Eastern Armenian in classical orthography, 1920s diaspora print.
     "Ազգ և հայրենիք": frozenset({41, 68, 91, 122, 153, 204, 229, 253, 278, 296}),
+    # Eastern Armenian in classical orthography, 1840s: the needle names
+    # the volume, since vol. 6 of his works is a different (mixed) edition.
+    "Խաչատուր Աբովյան, Երկերի լիակատար ժողովածու, հատոր 1": frozenset(
+        {45, 77, 99, 130, 164, 191, 232, 271, 302, 351}
+    ),
 }
 
 #: Pages that are not evaluation pages but print the same text as one --
@@ -114,6 +119,8 @@ OVERLAPPING_PAGES: dict[str, frozenset[int]] = {
     ),
     "Faustus of Byzantium": frozenset({214, 215}),
     "(Soviet Armenian Encyclopedia) 9.djvu": frozenset({197}),
+    # Brief 014: the scan carries p. 98 twice; p. 97 shares 303 runs with it.
+    "Գրական քննադատական երկեր, Նիկոլ Աղբալյան": frozenset({97}),
 }
 
 # The Wikisource index titles carry the volume as a trailing "<n>.djvu", as in

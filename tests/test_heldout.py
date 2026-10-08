@@ -91,7 +91,7 @@ class TestWorkRegistry:
     def test_every_new_work_reserves_pages(self) -> None:
         """Brief 012 stage 1: each harvested work contributes an
         evaluation slice, fixed before anything trained on it."""
-        assert len(heldout.WORK_PAGES) == 15
+        assert len(heldout.WORK_PAGES) == 16
         assert all(len(pages) >= 5 for pages in heldout.WORK_PAGES.values())
 
     def test_the_registry_reaches_the_real_index_titles(self) -> None:
@@ -114,6 +114,8 @@ class TestWorkRegistry:
             "Ինդեքս:Mkrtich Khrimian, Works (Խրիմյան Հայրիկ, Երկեր).djvu",
             "Ինդեքս:Hagop Baronian, National Bigshots (Յակոբ Պարոնեան, Ազգային Ջոջեր).djvu",
             "Ինդեքս:Ազգ և հայրենիք, Յովհաննէս Քաջազնունի.djvu",
+            "Ինդեքս:Խաչատուր Աբովյան, Երկերի լիակատար ժողովածու, հատոր 1 "
+            "(Khachatur Abovyan, Collective works, volume 1).djvu",
         ]
         for title in titles:
             assert heldout.held_out_pages(title) is not None, title
@@ -132,6 +134,15 @@ class TestWorkRegistry:
         """The needle names the one volume harvested; his anthology and
         literary history on Wikisource are different works."""
         assert heldout.held_out_pages("Ինդեքս:Ընտրանի, Նիկոլ Աղբալյան.djvu") is None
+
+    def test_abovyans_other_volumes_are_not_held_out(self) -> None:
+        assert heldout.held_out_pages("Ինդեքս:Խաչատուր Աբովյան, Երկեր, հատոր 6.djvu") is None
+        assert (
+            heldout.held_out_pages(
+                "Ինդեքս:Խաչատուր Աբովյան, Երկերի լիակատար ժողովածու, հատոր 3 (Khachatur Abovyan).djvu"
+            )
+            is None
+        )
 
 
 class TestOverlappingPages:
