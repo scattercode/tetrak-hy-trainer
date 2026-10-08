@@ -380,6 +380,25 @@ class TestNormaliseTranscript:
         """What tells a sound change from a quotation is the closing '>'."""
         assert wikisource.normalise_transcript("ասաց<Ազգ> և") == "ասաց«Ազգ» և"
 
+    def test_classical_transcriber_marks_become_armenian_punctuation(self) -> None:
+        # Brief 014: the apostrophe of elision, the comma and the emphasis
+        # mark as the classical harvests' transcribers type them.
+        assert wikisource.normalise_transcript("կ’ուզէր կˈիմանանք") == "կ՚ուզէր կ՚իմանանք"
+        assert wikisource.normalise_transcript("նախ` արանց`") == "նախ՝ արանց՝"
+        assert wikisource.normalise_transcript("ո′չ Գագի´կ") == "ո՛չ Գագի՛կ"
+
+    def test_the_same_marks_are_left_alone_outside_armenian_words(self) -> None:
+        assert wikisource.normalise_transcript("l’étude 5′ ``") == "l’étude 5′ ``"
+
+    def test_soft_hyphen_not_sign_and_ligature(self) -> None:
+        assert wikisource.normalise_transcript("մշա\u00adկոյթին") == "մշակոյթին"
+        assert wikisource.normalise_transcript("փոք¬") == "փոք-"
+        assert wikisource.normalise_transcript("երբեﬓ") == "երբեմն"
+
+    def test_wikitable_markup_is_stripped(self) -> None:
+        page = "{| class=x\n|-\n| առաջին || երկրորդ\n! գլուխ\n|}\nվերջ"
+        assert wikisource.normalise_transcript(page) == "\n\nառաջին երկրորդ\nգլուխ\n\nվերջ"
+
     def test_minus_sign_becomes_an_en_dash(self) -> None:
         """U+2212 is a near-perfect homoglyph of the en dash, so it is
         normalised rather than admitted to the charset."""
