@@ -282,6 +282,9 @@ _TRANSCRIPT_SUBSTITUTIONS = {
 }
 
 
+# Deliberately absent from every table here: եւ and և. Ground truth says
+# what the page prints (brief 014, 2026-10-08); the equivalence lives in the
+# metric and the fold, not in the label.
 # Marks typed for the Armenian apostrophe, comma and emphasis inside an
 # Armenian word -- the classical harvests' own transcriber habits, found by
 # the charset diff. Scoped to tokens with an Armenian letter, like the
