@@ -95,6 +95,13 @@ engine's mistakes.
 
 - **`--pages`, not `--limit`, for front matter.** Volume 1 opens with Russian
   title pages and a preface; entries start around page 20.
+- **Material that is not on Wikisource** (brief 014: Մշակ from arar.sci.am)
+  goes under `runs/sources/<work>/` as downloaded, with a README naming the
+  source and its terms. `scripts/import_source_pages.py <work>` renders every
+  PDF page into `runs/eval/<work>/images/` and writes a manifest listing only
+  the pages that have a transcript at `text/<page>.txt`, so the set grows as
+  pages are proofread. Such a work has no `WORK_PAGES` entry: nothing can
+  train on it, since nothing harvests it.
 - **Verse pages are wrapped in `{{Poemx||<poem>…}}`.** Until cleaning 3
   (2026-10-08) the template stripper took the whole page with the wrapper and
   every poetry index harvested as empty, silently. Harvests taken before then

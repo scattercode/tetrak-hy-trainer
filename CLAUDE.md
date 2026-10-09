@@ -191,6 +191,9 @@ runs/
 ├── <run>/bundle/            packaged tetrak_hy.{yaml,py,pth}
 ├── <run>/wordlist.tsv.gz    the word list, with its .json sidecar
 ├── eval/<register>/         the held-out evaluation sets — never train on them
+├── sources/<work>/          raw downloads that are not Wikisource (Մշակ's PDFs from
+│                            arar.sci.am), with a README naming the source and terms;
+│                            import_source_pages.py turns them into eval/<work>/
 └── census/census.json       the Wikisource census cache
 ```
 
