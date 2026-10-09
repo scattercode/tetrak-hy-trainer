@@ -79,6 +79,12 @@ class TestArmenianTranscriptConventions:
     def test_full_stop_and_colon_are_equal(self):
         assert normalise("բժշկի։") == normalise("բժշկի:")
 
+    def test_two_letter_ew_and_ligature_are_equal(self):
+        # Brief 014: classical presses set եւ, reformed presses և; neither
+        # form is a reading error. Capitals fold too, via lowercasing.
+        assert word_recall("Երեւան եւ Եւրոպա", "Երևան և Եւրոպա") == 1.0
+        assert normalise("ԵՒ Եւ եւ") == "և և և"
+
     def test_abbreviation_dot_and_full_stop_are_equal(self):
         assert normalise("Ա․ Գրկ․") == normalise("Ա. Գրկ.")
 

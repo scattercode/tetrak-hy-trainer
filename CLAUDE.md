@@ -191,6 +191,9 @@ runs/
 ├── <run>/bundle/            packaged tetrak_hy.{yaml,py,pth}
 ├── <run>/wordlist.tsv.gz    the word list, with its .json sidecar
 ├── eval/<register>/         the held-out evaluation sets — never train on them
+├── sources/<work>/          raw downloads that are not Wikisource (Մշակ's PDFs from
+│                            arar.sci.am), with a README naming the source and terms;
+│                            import_source_pages.py turns them into eval/<work>/
 └── census/census.json       the Wikisource census cache
 ```
 
@@ -255,7 +258,6 @@ Decisions that directly affect this code:
    every released model carries it. `INCLUDE_SPACE` remains a flag, but
    turning it off would change `num_class` and invalidate every weight file,
    like any other charset change.
-2. **և / ԵՎ normalisation policy** — still open. To be decided when enough
-   real transcripts are in hand, and recorded in `charset.py` when made.
-   Membership of `և` itself is not in question; only whether ԵՎ/Եւ forms in
-   ground truth are folded to it.
+2. **և / ԵՒ normalisation policy** — *settled 2026-10-08 (brief 014)*:
+   ground truth stays as printed, and the metric and `fold_script` treat
+   `եւ` and `և` as one. Recorded in `charset.py`'s docstring.

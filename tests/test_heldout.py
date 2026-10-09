@@ -91,7 +91,7 @@ class TestWorkRegistry:
     def test_every_new_work_reserves_pages(self) -> None:
         """Brief 012 stage 1: each harvested work contributes an
         evaluation slice, fixed before anything trained on it."""
-        assert len(heldout.WORK_PAGES) == 7
+        assert len(heldout.WORK_PAGES) == 16
         assert all(len(pages) >= 5 for pages in heldout.WORK_PAGES.values())
 
     def test_the_registry_reaches_the_real_index_titles(self) -> None:
@@ -105,9 +105,44 @@ class TestWorkRegistry:
             "Ինդեքս:Hagop Baronian, Collected works, vol. 10.djvu",
             "Ինդեքս:Թումանյանի ԵԼԺ հ5.djvu",
             "Ինդեքս:Հանրամատչելի բժշկական հանրագիտարան (Popular medical encyclopedia).djvu",
+            # Brief 014's classical registers.
+            "Ինդեքս:Հայկական տպագրութիւն.djvu",
+            "Ինդեքս:Արամ Մանուկյան․ Փաստաթղթերի և նյութերի ժողովածու.djvu",
+            "Ինդեքս:Գրական քննադատական երկեր, Նիկոլ Աղբալյան.djvu",
+            "Ինդեքս:Քաղաքապետի մը հիշատակները, Ալեքսանդր Խատիսեան.djvu",
+            "Ինդեքս:Երկիրներ եւ մարդեր, Թորոս Թորանեան.djvu",
+            "Ինդեքս:Mkrtich Khrimian, Works (Խրիմյան Հայրիկ, Երկեր).djvu",
+            "Ինդեքս:Hagop Baronian, National Bigshots (Յակոբ Պարոնեան, Ազգային Ջոջեր).djvu",
+            "Ինդեքս:Ազգ և հայրենիք, Յովհաննէս Քաջազնունի.djvu",
+            "Ինդեքս:Խաչատուր Աբովյան, Երկերի լիակատար ժողովածու, հատոր 1 "
+            "(Khachatur Abovyan, Collective works, volume 1).djvu",
         ]
         for title in titles:
             assert heldout.held_out_pages(title) is not None, title
+
+    def test_baronians_two_works_do_not_share_an_entry(self) -> None:
+        """A bare "Hagop Baronian" needle would have handed the satire volume
+        the collected works' page numbers, which it does not have."""
+        collected = heldout.held_out_pages("Ինդեքս:Hagop Baronian, Collected works, vol. 10.djvu")
+        satire = heldout.held_out_pages(
+            "Ինդեքս:Hagop Baronian, National Bigshots (Յակոբ Պարոնեան, Ազգային Ջոջեր).djvu"
+        )
+        assert collected and satire and collected != satire
+        assert 293 in collected and 293 not in satire
+
+    def test_aghbalyans_other_works_are_not_held_out(self) -> None:
+        """The needle names the one volume harvested; his anthology and
+        literary history on Wikisource are different works."""
+        assert heldout.held_out_pages("Ինդեքս:Ընտրանի, Նիկոլ Աղբալյան.djvu") is None
+
+    def test_abovyans_other_volumes_are_not_held_out(self) -> None:
+        assert heldout.held_out_pages("Ինդեքս:Խաչատուր Աբովյան, Երկեր, հատոր 6.djvu") is None
+        assert (
+            heldout.held_out_pages(
+                "Ինդեքս:Խաչատուր Աբովյան, Երկերի լիակատար ժողովածու, հատոր 3 (Khachatur Abovyan).djvu"
+            )
+            is None
+        )
 
 
 class TestOverlappingPages:

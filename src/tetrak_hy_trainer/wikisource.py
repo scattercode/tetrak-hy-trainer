@@ -205,6 +205,12 @@ _REF = re.compile(r"<ref[^>]*>.*?</ref>|<ref[^>]*/>", re.DOTALL)
 _HTML_TAG = re.compile(r"</?[a-zA-Z][^>]*>")
 # Innermost-first template removal; applied repeatedly for nesting.
 _TEMPLATE = re.compile(r"\{\{[^{}]*\}\}")
+# A template whose body is a <poem> block, such as {{Poemx||<poem>…</poem>}}
+# on hy.wikisource's verse pages. Templates are stripped whole (below), so
+# without this the entire page -- which is the poem -- went with the
+# wrapper, and every poetry index harvested as empty: Varoujan, Terian,
+# Charents vols. 2-3, Tsaturyan, Toranian's verse. Keep the poem's text.
+_POEM_TEMPLATE = re.compile(r"\{\{[^{}<]*<poem>(.*?)</poem>[^{}]*\}\}", re.DOTALL)
 _WIKILINK = re.compile(r"\[\[(?:[^|\]]*\|)?([^\]]*)\]\]")
 _EMPHASIS = re.compile(r"'{2,}")
 
@@ -228,6 +234,7 @@ def clean_wikitext(text: str, index_title: str = "") -> str:
     text = _NOINCLUDE.sub("", text)
     text = _SECTION_TAG.sub("", text)
     text = _REF.sub("", text)
+    text = _POEM_TEMPLATE.sub(r"\1", text)
     while _TEMPLATE.search(text):
         text = _TEMPLATE.sub("", text)
     text = _WIKILINK.sub(r"\1", text)
@@ -263,7 +270,51 @@ _TRANSCRIPT_SUBSTITUTIONS = {
     "\u2015": "—",
     # A byte-order mark opening a page: pure encoding artefact.
     "\ufeff": "",
+    # Brief 014's classical harvests (33 sources, 2026-10-08):
+    # A soft hyphen inside a word ("մշա\xadկոյթին"), a reflow marker no
+    # page prints. 951 occurrences in two diaspora sources.
+    "\u00ad": "",
+    # The not sign for a line-end hyphen ("փոք¬ / րիկ"): the page prints a
+    # hyphen, which de-hyphenation already knows how to rejoin.
+    "\u00ac": "-",
+    # The men-now presentation ligature typed for two letters.
+    "\ufb13": "մն",
 }
+
+
+# Deliberately absent from every table here: եւ and և. Ground truth says
+# what the page prints (brief 014, 2026-10-08); the equivalence lives in the
+# metric and the fold, not in the label.
+# Marks typed for the Armenian apostrophe, comma and emphasis inside an
+# Armenian word -- the classical harvests' own transcriber habits, found by
+# the charset diff. Scoped to tokens with an Armenian letter, like the
+# colon, because every one of them is genuine print in other scripts
+# (a Latin apostrophe, a French accent, a prime in a measurement).
+#   ’ ˈ → ՚  the apostrophe of elision (կ՚ուզէ), 427 + 15 occurrences
+#   `   → ՝  the Armenian comma (բութ), 551
+#   ′ ´ → ՛  the emphasis mark (շեշտ), 51 + 5
+_ARMENIAN_TOKEN_MARKS = str.maketrans(
+    {"\u2019": "՚", "\u02c8": "՚", "`": "՝", "\u2032": "՛", "\u00b4": "՛"}
+)
+
+
+def _armenian_marks(text: str) -> str:
+    return _ARMENIAN_TOKEN_COLON.sub(lambda m: m.group().translate(_ARMENIAN_TOKEN_MARKS), text)
+
+
+# Wikitable markup the template and tag strippers leave behind: table
+# open/close and row lines, cell markers at a line start and inline cell
+# separators. 3,742 pipes in 17 of the 33 classical harvests, each one a
+# token the charset filter would drop with the word attached to it.
+_WIKITABLE_LINE = re.compile(r"^[ \t]*(\{\||\|\}|\|-|\|\+).*$", re.MULTILINE)
+_WIKITABLE_CELL_START = re.compile(r"^[ \t]*[|!][ \t]*", re.MULTILINE)
+_WIKITABLE_CELL_SEPARATOR = re.compile(r"[ \t]*(\|\||!!)[ \t]*")
+
+
+def _wikitable_markup(text: str) -> str:
+    text = _WIKITABLE_LINE.sub("", text)
+    text = _WIKITABLE_CELL_START.sub("", text)
+    return _WIKITABLE_CELL_SEPARATOR.sub(" ", text)
 
 
 # The ASCII colon typed for the Armenian full stop. Not a plain entry in
@@ -334,7 +385,10 @@ PRINTED_ANGLE_BRACKETS = frozenset(
 # existed count as 1.
 #   2  angle brackets the page prints are no longer folded to guillemets
 #      (charset v4). Text cleaned at 1 has lost them for good.
-TRANSCRIPT_CLEANING = 2
+#   3  verse inside a {{Poemx|<poem>…</poem>}} wrapper is kept (brief 014).
+#      Cleaning 1 and 2 stripped it with the template, so a poetry page
+#      saved earlier is empty or missing its verse.
+TRANSCRIPT_CLEANING = 3
 
 
 def cleaning_of(entry: dict) -> int:
@@ -366,10 +420,12 @@ def normalise_transcript(
             for text already normalised whose source is no longer known,
             such as a dataset's labels.
     """
+    text = _wikitable_markup(text)
     for source, replacement in _TRANSCRIPT_SUBSTITUTIONS.items():
         text = text.replace(source, replacement)
     if not (angle_brackets_printed or index_title in PRINTED_ANGLE_BRACKETS):
         text = _guillemets(text)
+    text = _armenian_marks(text)
     return _armenian_full_stops(text)
 
 
