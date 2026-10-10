@@ -18,6 +18,12 @@ licence recorded (see the README's data sources section), and code derived
 from EasyOCR's Apache 2.0 trainer keeps its headers, with the NOTICE file
 updated when such code lands.
 
+If you work with a coding agent — Claude Code, Codex, Cursor, Gemini CLI or
+another — point it at `AGENTS.md`, which carries the repository's rules in
+the form such tools read, and at the guides under `.claude/skills/`, which
+are plain Markdown any tool or person can open. The rules there are the
+same as here, stated for an agent.
+
 ## Getting set up
 
 ```bash
@@ -98,7 +104,7 @@ Releases are fully automated — never perform one by hand:
   version literal to bump.
 
 Trained weights are attached to these releases as assets, each with a
-checksum and a provenance record — see CLAUDE.md's artefact discipline.
+checksum and a provenance record — see the artefact discipline in AGENTS.md.
 Weights, datasets and crops are never committed to git.
 
 ## Conventions
