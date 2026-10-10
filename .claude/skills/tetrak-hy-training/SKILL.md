@@ -10,7 +10,7 @@ least once when skipped or done in the wrong order — the traps are marked.
 
 ## Before anything
 
-`CLAUDE.md` has the two maps this pipeline leans on: **which interpreter runs
+`AGENTS.md` has the two maps this pipeline leans on: **which interpreter runs
 which script** (picking the wrong one is the usual first five minutes lost),
 and **the `runs/` layout** the scripts' defaults expect. It also carries the
 hard rules, the held-out split above all. Read those first; they are not
