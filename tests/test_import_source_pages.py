@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,11 @@ REPO = Path(__file__).resolve().parent.parent
 spec = importlib.util.spec_from_file_location("isp", REPO / "scripts" / "import_source_pages.py")
 isp = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(isp)
+
+
+needs_poppler = pytest.mark.skipif(
+    shutil.which("pdfinfo") is None, reason="needs poppler's pdfinfo and pdftoppm on PATH"
+)
 
 
 @pytest.fixture
@@ -28,6 +34,7 @@ def work(tmp_path, monkeypatch):
     return "paper"
 
 
+@needs_poppler
 def test_pages_render_and_only_transcribed_ones_enter_the_manifest(work):
     pages = isp.import_work(work, dpi=50, index_title="Paper")
     assert [p["page_number"] for p in pages] == [188201, 188202]

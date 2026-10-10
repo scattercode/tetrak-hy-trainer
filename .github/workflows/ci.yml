@@ -23,6 +23,11 @@ jobs:
           python-version: "3.11"
           cache: pip
 
+      # scripts/import_source_pages.py shells out to poppler's pdfinfo and
+      # pdftoppm, and its test renders a real PDF through them.
+      - name: Install poppler
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
+
       - name: Install
         run: pip install -e '.[dev]'
 
