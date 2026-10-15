@@ -66,12 +66,39 @@ WORK_PAGES: dict[str, frozenset[int]] = {
     # Western Armenian.
     "Vahan Totovents": frozenset({4, 9, 31, 50, 63, 110, 123, 197, 311, 520}),
     "Yervand Otyan": frozenset({6, 18, 21, 51, 198, 229, 241, 275, 313, 713}),
-    "Hagop Baronian": frozenset({293, 294, 295, 517, 560, 623, 685, 689, 690, 749}),
+    # "Collected works" is part of the needle: the same author's
+    # original-orthography "Ազգային Ջոջեր" is a different work with its own
+    # entry below, and a bare "Hagop Baronian" would have claimed it.
+    "Hagop Baronian, Collected works": frozenset(
+        {293, 294, 295, 517, 560, 623, 685, 689, 690, 749}
+    ),
     # Eastern Armenian literary, and the source with the heaviest Russian
     # apparatus -- a fair test of how the model handles mixed pages.
     "Թումանյանի ԵԼԺ": frozenset({610, 620, 645, 685, 687, 689, 709, 744, 746, 776}),
     # A second encyclopedia register, different publisher and face.
     "Popular medical encyclopedia": frozenset({413, 470, 512, 514, 749, 766, 771, 773, 775, 776}),
+    # Brief 014: classical orthography. Pages proposed by
+    # scripts/propose_heldout.py (body-text density, Cyrillic-free, spread
+    # through the work) on 2026-10-08, before anything trained on them.
+    # Diaspora and 19th-century presses; the 3840 px sources first.
+    "Հայկական տպագրութիւն": frozenset({67, 115, 151, 194, 242, 277, 326, 363, 414, 442}),
+    "Արամ Մանուկյան": frozenset({34, 83, 122, 159, 181, 207, 231, 272, 299, 423}),
+    "Գրական քննադատական երկեր, Նիկոլ Աղբալյան": frozenset(
+        {35, 44, 69, 86, 98, 113, 131, 159, 220, 313}
+    ),
+    # Western Armenian in classical orthography: a memoir, a travel book,
+    # a 19th-century prelate, and Baronian's satire in its own spelling.
+    "Խատիսեան": frozenset({62, 87, 116, 137, 169, 198, 227, 255, 279, 299}),
+    "Երկիրներ եւ մարդեր": frozenset({44, 69, 89, 114, 132, 160, 194, 229, 276, 308}),
+    "Mkrtich Khrimian": frozenset({50, 78, 101, 129, 158, 176, 227, 258, 294, 346}),
+    "National Bigshots": frozenset({25, 38, 50, 64, 77, 89, 100, 116, 130, 152}),
+    # Eastern Armenian in classical orthography, 1920s diaspora print.
+    "Ազգ և հայրենիք": frozenset({41, 68, 91, 122, 153, 204, 229, 253, 278, 296}),
+    # Eastern Armenian in classical orthography, 1840s: the needle names
+    # the volume, since vol. 6 of his works is a different (mixed) edition.
+    "Խաչատուր Աբովյան, Երկերի լիակատար ժողովածու, հատոր 1": frozenset(
+        {45, 77, 99, 130, 164, 191, 232, 271, 302, 351}
+    ),
 }
 
 #: Pages that are not evaluation pages but print the same text as one --
@@ -92,6 +119,8 @@ OVERLAPPING_PAGES: dict[str, frozenset[int]] = {
     ),
     "Faustus of Byzantium": frozenset({214, 215}),
     "(Soviet Armenian Encyclopedia) 9.djvu": frozenset({197}),
+    # Brief 014: the scan carries p. 98 twice; p. 97 shares 303 runs with it.
+    "Գրական քննադատական երկեր, Նիկոլ Աղբալյան": frozenset({97}),
 }
 
 # The Wikisource index titles carry the volume as a trailing "<n>.djvu", as in

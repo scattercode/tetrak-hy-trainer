@@ -13,10 +13,22 @@ Composition
   (U+0561–U+0586, 38 letters), generated from the Unicode ranges rather
   than typed, so a typo cannot silently drop a letter.
 - The և ligature (U+0587). Lowercase-only; it is ubiquitous in printed
-  Armenian, so it is *in* the charset. The open policy question is
-  normalisation on the ground-truth side (whether ԵՎ/Եւ forms in
-  transcripts are folded to և), not membership here. Decided when real
-  transcripts are in hand; record the decision in this docstring.
+  Armenian, so it is *in* the charset. **Policy, decided 2026-10-08 (brief
+  014):** ground truth stays as the page prints it -- ``եւ`` where the press
+  set two sorts, ``և`` where it set the ligature -- so the model learns to
+  read both; the metric (``accuracy.normalise``) and ``tetrak_hy.fold_script``
+  treat the two as one, so no engine is ranked on which form it emitted.
+  Classical-orthography presses split 21 to 16 on the habit; reformed
+  presses set the ligature almost without exception. Nothing is folded on
+  the ground-truth side.
+- Pending for charset v5 (brief 014, not yet appended): the Armenian
+  apostrophe ՚ (U+055A), printed in classical orthography for elision
+  (``կ՚ուզէ``) and absent from every reformed source; and the Russian
+  alphabet in both cases including ё/Ё (66 classes), with the pre-1918
+  letters left out because no source supplies them. Ground truth for a
+  Cyrillic word is decided per token by its letters; tokens mixing Cyrillic
+  with Armenian or Latin letters (formulae, transcriber slips) are dropped
+  from training rather than taught.
 - Armenian punctuation and typography: ՝ ՛ ՞ ՜ ։ ֊ « ».
 - Western digits and basic Latin, because 19th–20th century Armenian print
   mixes in Latin names, numerals and abbreviations.
