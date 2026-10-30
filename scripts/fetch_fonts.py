@@ -20,6 +20,13 @@ two things per file rather than trusting the download page:
   discovered. All eight GHEA faces lack U+2024, exactly the class of
   gap that made this guard necessary.
 
+The GHEA and Arian AMU faces came from fonter.am until October 2026, when
+its download links began answering 303 to an HTML page behind a signed,
+expiring link. They now come from the fonts-armenian-extra collection on
+GitHub, pinned to a commit, and each file is checked against the SHA-256 of
+the copy v0 to v6 were trained with: all twelve are byte-identical, so the
+change of source changes nothing the renderer draws.
+
 Mshtakan is not fetched: it ships with macOS and is picked up from the
 system by the renderer.
 
@@ -30,9 +37,7 @@ Run from the repo root:
 
 from __future__ import annotations
 
-import io
 import sys
-import zipfile
 from pathlib import Path
 
 import requests
@@ -40,26 +45,98 @@ import requests
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
-from tetrak_hy_trainer import charset, synth  # noqa: E402
+from tetrak_hy_trainer import charset, fontsource, synth  # noqa: E402
+from tetrak_hy_trainer.fontsource import Face  # noqa: E402
 
 FONT_DIR = REPO / "runs" / "v0" / "fonts"
 
-# family slug on fonter.am -> the faces expected inside its zip
-FAMILIES = {
-    "ghea-grapalat": (
+MIRROR = (
+    "https://codeload.github.com/lecramyajiv/fonts-armenian-extra/tar.gz/"
+    "387f6ec024db5a8bf9a819deda146a8871dd64dc"
+)
+_ROOT = "fonts-armenian-extra-387f6ec024db5a8bf9a819deda146a8871dd64dc"
+
+
+def _mirror(family: str, folder: str, filename: str, sha256: str) -> Face:
+    return Face(family, filename, MIRROR, f"{_ROOT}/{folder}/{filename}", sha256)
+
+
+# The faces every model since v0 has been rendered in, with the hashes of
+# the files they were rendered from.
+FACES = (
+    _mirror(
+        "GHEA Grapalat",
+        "OTF",
         "GHEAGrpalatReg.otf",
+        "61101112caaf07d575d6bd038e6661cbf9799daa1f364509d818db37eaf68700",
+    ),
+    _mirror(
+        "GHEA Grapalat",
+        "OTF",
         "GHEAGpalatBld.otf",
+        "30c2fd93c127d2de488d4d21102c86242831f424739f1e9573f5b3891105abbe",
+    ),
+    _mirror(
+        "GHEA Grapalat",
+        "OTF",
         "GHEAGrapalatRit.otf",
+        "054e3c1aa658905137d976314abc3935915a0a912ea5260a01591284e69813dd",
+    ),
+    _mirror(
+        "GHEA Grapalat",
+        "OTF",
         "GHEAGrapalatBlit.otf",
+        "ec6cfe10e720c35af69ad81f9231d7e254aef4c94537863471c76a272e283980",
     ),
-    "ghea-mariam": (
+    _mirror(
+        "GHEA Mariam",
+        "OTF",
         "GHEAMariamReg.otf",
-        "GHEAMariamBld.otf",
-        "GHEAMariamRIt.otf",
-        "GHEAMariamBlit.otf",
+        "806ab65039449b157789dad32e8fb1efdc6131679454775c9003f5252541afc4",
     ),
-    "arian-amu": ("arnamu.ttf", "arnamu_bold.ttf", "arnamu_italic.ttf", "arnamu_italic_bold.ttf"),
-}
+    _mirror(
+        "GHEA Mariam",
+        "OTF",
+        "GHEAMariamBld.otf",
+        "0dc5eea38e0cf2d7e19d649f2996cb59726f2a569ce6b8abc4618979bb98e345",
+    ),
+    _mirror(
+        "GHEA Mariam",
+        "OTF",
+        "GHEAMariamRIt.otf",
+        "673045ee28bf37ba6051a6af0c3ba401dc04ae07b7a7d93cf606c6556e74b3b8",
+    ),
+    _mirror(
+        "GHEA Mariam",
+        "OTF",
+        "GHEAMariamBlit.otf",
+        "412a51e0338b660037fb82d5b19347f05aa99007bee49f56cdbbb30fe1357cce",
+    ),
+    _mirror(
+        "Arian AMU",
+        "TTF",
+        "arnamu.ttf",
+        "9733b1a04f52457839b301c1fca3e68e4132420001bb83c0ba8cf7d3212e6aa6",
+    ),
+    _mirror(
+        "Arian AMU",
+        "TTF",
+        "arnamu_bold.ttf",
+        "7197abb08ce1cc16ea3bcf35e920cf2707214a7a3e18fe4065988d59a728184f",
+    ),
+    _mirror(
+        "Arian AMU",
+        "TTF",
+        "arnamu_italic.ttf",
+        "86169da604999c3cf7d6fc0213518b4ed7d65ec5f822c1d65f3e557c8e37d7d2",
+    ),
+    _mirror(
+        "Arian AMU",
+        "TTF",
+        "arnamu_italic_bold.ttf",
+        "0c916213c18f49afcd33636238d52b39ef61f38ad49c59ed501396b87d015761",
+    ),
+)
 
 NOTO = {
     "NotoSansArmenian.ttf": (
@@ -73,17 +150,6 @@ NOTO = {
 }
 
 
-def licence_of(path: Path) -> str:
-    from fontTools.ttLib import TTFont
-
-    font = TTFont(str(path), fontNumber=0, lazy=True)
-    try:
-        name = font["name"]
-        return (name.getDebugName(13) or name.getDebugName(14) or "(none recorded)").strip()
-    finally:
-        font.close()
-
-
 def main() -> int:
     FONT_DIR.mkdir(parents=True, exist_ok=True)
     session = requests.Session()
@@ -91,17 +157,8 @@ def main() -> int:
         "tetrak-hy-trainer (https://github.com/scattercode/tetrak-hy-trainer)"
     )
 
-    for slug, faces in FAMILIES.items():
-        missing = [f for f in faces if not (FONT_DIR / f).exists()]
-        if missing:
-            print(f"fetching {slug} ...", flush=True)
-            response = session.get(f"https://fonter.am/fonts/download/{slug}", timeout=120)
-            response.raise_for_status()
-            with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
-                for member in archive.namelist():
-                    basename = Path(member).name
-                    if basename in faces:
-                        (FONT_DIR / basename).write_bytes(archive.read(member))
+    for face in FACES:
+        fontsource.fetch(face, FONT_DIR, FONT_DIR / ".cache", session)
 
     for filename, url in NOTO.items():
         if not (FONT_DIR / filename).exists():
@@ -115,7 +172,7 @@ def main() -> int:
     for path in sorted([*FONT_DIR.glob("*.tt*"), *FONT_DIR.glob("*.otf")]):
         gaps = synth.missing_glyphs(str(path), full)
         coverage = "full" if not gaps else f"missing {''.join(sorted(gaps))!r}"
-        print(f"{path.name:<26} {licence_of(path).splitlines()[0][:44]:<44} {coverage}")
+        print(f"{path.name:<26} {fontsource.licence_of(path).splitlines()[0][:44]:<44} {coverage}")
     return 0
 
 
