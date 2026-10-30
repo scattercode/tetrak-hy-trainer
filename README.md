@@ -119,6 +119,10 @@ Recorded as sources are adopted:
 | Arian AMU (four faces) | Rendering faces | SIL Open Font Licence 1.1, read from the font files |
 | GHEA Grapalat, GHEA Mariam (eight faces) | Rendering faces | Armenian National Book Chamber free-use terms — **not** OFL; used for rendering only, never redistributed |
 | Mshtakan | Rendering face | Ships with macOS; picked up from the system, never redistributed |
+| Display faces for modern print (brief 019; in no released model yet): Mardoto, Montserrat arm, Noto Sans and Serif Armenian at further weights and widths, Google Sans, Handjet, Sharqayin, Har8 Black Ops One, Webstart, OpenGOST, Kelvinch, Bainsley, Catrinity, Kurland, Oldtimer, Arian AMU Serif, Arian Grqi, Iosevka Aile and Etoile | Rendering faces, and a held-out test set (Kelvinch, Iosevka Etoile, Sharqayin, Catrinity) | SIL Open Font Licence 1.1, read from the font files (Mardoto's repository adds Apache-2.0) |
+| GNU FreeSans, FreeSerif; DejaVu Sans and Serif | Rendering faces | GPLv3 with the font exception; Bitstream Vera licence and public domain |
+| Quivira | Rendering face | Public domain |
+| GAA Gayane (Gayane Andreasyan), Galiver Sans (Josen Fonts), Bokonique, Nicolo, Nortar, Yerevanyan and Grqalir (Hrach Hovhannissyan, Renderforest), Braind Amanor, Zbans, Yerevan, Gyumri and Republic (Edward Kankanyan), Calama Condensed (Ben Karamyan), Arti (Khajag Apelian for Hamazkayin) | Rendering faces | fonter.am's stated terms: personal and paid work, print and exported designs, passing the file on with the author's name. Accepted 30 October 2026; the designers are credited here and in any card for images rendered in their faces |
 
 Two disciplines attach to the encyclopedia source:
 
@@ -134,7 +138,10 @@ Two disciplines attach to the encyclopedia source:
 
 `scripts/fetch_fonts.py` fetches the faces and prints the licence each
 font file declares about itself, which is how the GHEA correction above was
-found. Further candidates: Armenian Wikisource's public-domain period texts
+found. `scripts/fetch_display_fonts.py` does the same for the display faces,
+into `runs/fonts-display/`. Both pin every file by SHA-256, and both take the
+fonter.am faces from the fonts-armenian-extra collection on GitHub at a fixed
+commit, since fonter.am's own download links are signed and expire. Further candidates: Armenian Wikisource's public-domain period texts
 and Armenian Wikipedia (CC BY-SA 4.0) for corpus text.
 
 ## Licence
