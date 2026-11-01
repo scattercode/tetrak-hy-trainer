@@ -17,8 +17,9 @@ on:
   push:
     branches: [main]
 
-permissions:
-  contents: write
+# Granted per job below, not here: a workflow-level grant reaches every job,
+# and only the release job pushes.
+permissions: {}
 
 concurrency:
   group: release
@@ -29,6 +30,8 @@ jobs:
     # Belt and braces: never react to our own release commit.
     if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       released: ${{ steps.version.outputs.release }}
       version: ${{ steps.version.outputs.next }}
@@ -110,6 +113,9 @@ jobs:
     needs: release
     if: needs.release.outputs.released == 'true'
     runs-on: ubuntu-latest
+    # Reads the tag and nothing more.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
         with:
