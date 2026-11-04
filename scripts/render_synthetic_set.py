@@ -21,6 +21,14 @@ running text the pre-train sampled almost never contains. ``--faces``
 restricts rendering to faces whose file names contain any of the given
 substrings (``bld,blit,rit,bold,italic`` for the bold and italic faces).
 
+``--font-dir`` renders in another folder's faces instead of the book faces
+(brief 019: ``runs/fonts-display/train`` from ``fetch_display_fonts.py``).
+When a ``faces.tsv`` sits in that folder or the one above it, lines are
+drawn family first, so a family with many styles does not crowd out one
+with a single face. ``--upper-share`` sets that fraction of the lines in
+capitals, which is how caps-only display faces get drawn at all: the
+renderer gives them only all-capital lines.
+
 Held-out pages are excluded by the same sampler ``train_synthetic.py``
 uses, so no evaluation transcript is rendered.
 
@@ -37,6 +45,7 @@ Run:
 from __future__ import annotations
 
 import argparse
+import csv
 import random
 import sys
 import time
@@ -83,6 +92,17 @@ def index_line(words: list[str], rng: random.Random, chars_max: int = 30) -> str
     return line.rstrip()
 
 
+def families_beside(font_dir: Path) -> dict[str, str] | None:
+    """File name to family, from a ``faces.tsv`` in *font_dir* or its parent."""
+    for candidate in (font_dir / "faces.tsv", font_dir.parent / "faces.tsv"):
+        if candidate.exists():
+            with candidate.open(newline="") as handle:
+                return {
+                    row["file"]: row["family"] for row in csv.DictReader(handle, delimiter="\t")
+                }
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-name", required=True)
@@ -95,6 +115,10 @@ def main() -> int:
     parser.add_argument("--upper", action="store_true", help="render every line in capitals")
     parser.add_argument("--index", action="store_true", help="render index entries and page lists")
     parser.add_argument("--faces", default=None, help="comma-separated file-name substrings")
+    parser.add_argument("--font-dir", type=Path, default=None, help="render in this folder's faces")
+    parser.add_argument(
+        "--upper-share", type=float, default=0.0, help="this fraction of lines in capitals"
+    )
     parser.add_argument("--seed", type=int, default=13)
     args = parser.parse_args()
 
@@ -119,6 +143,10 @@ def main() -> int:
         if strays:
             raise SystemExit(f"capitals outside the charset: {strays!r}")
         samples = upper
+    elif args.upper_share:
+        samples = [
+            upper_case_line(line) if rng.random() < args.upper_share else line for line in samples
+        ]
     allowed = set(charset.character_list())
     strays = sorted({c for line in samples for c in line} - allowed)
     if strays:
@@ -126,7 +154,8 @@ def main() -> int:
     print(f"line samples: {len(samples)}; e.g. {samples[:3]!r}", flush=True)
 
     sizes = tuple(s for s in (18, 22, 28, 36, 48, 64) if s >= args.min_size)
-    fonts = find_fonts()
+    fonts = find_fonts(args.font_dir.resolve() if args.font_dir else None)
+    families = families_beside(args.font_dir) if args.font_dir else None
     if args.faces:
         wanted = [needle.strip().lower() for needle in args.faces.split(",")]
         fonts = [font for font in fonts if any(needle in font.name.lower() for needle in wanted)]
@@ -140,6 +169,7 @@ def main() -> int:
         use_augment=True,
         seed=args.seed,
         names=(f"{args.name}_train", f"{args.name}_val"),
+        families=families,
     )
     print(
         f"rendered {crops} crops into {root / f'{args.name}_train'} in {time.time() - started:.0f}s"

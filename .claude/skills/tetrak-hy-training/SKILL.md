@@ -117,6 +117,31 @@ line it cannot fully draw — but they should be seen, not discovered. All eight
 GHEA faces lack U+2024; Mshtakan (macOS system font) lacks Latin `A`/`x` and
 both v2 additions.
 
+**Display faces (brief 019)** are a separate set, so the pre-train's faces
+never change by accident:
+
+```bash
+python scripts/fetch_display_fonts.py     # runs/fonts-display/{train,heldout}
+python scripts/render_synthetic_set.py --run-name <run> --name syn_display \
+    --font-dir runs/fonts-display/train --upper-share 0.15 --harvest-dirs …
+python scripts/render_face_testset.py --harvest-dirs …    # runs/b019/face_test
+../tetrak-easyocr-armenian/.venv/bin/python scripts/evaluate_face_set.py \
+    --bundle runs/<run>/bundle
+```
+
+- **Never move a face into `heldout/` or out of it** without re-baselining:
+  the four held-out families are the only measure of reading a face the model
+  has never seen.
+- **Caps-only faces** (Oldtimer) draw capitals at lowercase code points. The
+  renderer counts every lowercase letter as missing from them, so they draw
+  only all-capital lines; `--upper-share` is what gives them any lines at all.
+- **A full cmap is not a drawn glyph.** Handjet cut at element shape 0 drew
+  nothing at all for every letter; check a new instance renders ink.
+- **Variable fonts** are cut into fixed instances at fetch time, because Pillow
+  draws only the default instance.
+- `os.walk` does not follow symlinks, so **a symlinked dataset folder is
+  silently skipped** by the trainer. Clone (`cp -cR`) rather than link.
+
 ## 5. Synthetic pre-train
 
 ```bash

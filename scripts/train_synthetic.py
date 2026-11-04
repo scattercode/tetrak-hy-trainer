@@ -137,6 +137,7 @@ def render_corpus(
     use_augment: bool,
     seed: int = 0,
     names: tuple[str, str] = ("syn_train", "syn_val"),
+    families: dict[str, str] | None = None,
 ) -> tuple[Path, int]:
     """Render train/val folders in the trainer's format; return (root, count).
 
@@ -157,18 +158,30 @@ def render_corpus(
     synth.missing_glyphs). Rendering through a face without the glyph
     would silently teach the model the wrong shape for whatever that face
     is missing, indistinguishable by eye from a genuine narrow glyph.
+
+    A caps-only face (:func:`synth.draws_capitals_for_lowercase`) counts
+    every lowercase letter as missing, so it draws only all-capital lines.
+
+    *families* maps a font file's name to its family (brief 019's display
+    faces, from ``faces.tsv``). Given, each line picks a family first and
+    then a face within it, so a family published in eighteen styles is
+    drawn as often as one with a single face. Left out, every face and size
+    is equally likely, exactly as before: the random draws are unchanged,
+    so a seeded corpus renders the same crops it always has.
     """
     from PIL import ImageFont
 
     rng = random.Random(seed)
     gaps_by_path = {
-        path: synth.missing_glyphs(str(path), charset.character_list()) for path in fonts
+        path: synth.missing_glyphs(str(path), charset.character_list()) | synth.case_gaps(str(path))
+        for path in fonts
     }
     faces = [
-        (ImageFont.truetype(str(path), size), gaps_by_path[path])
+        (ImageFont.truetype(str(path), size), gaps_by_path[path], path.name)
         for path in fonts
         for size in sizes
     ]
+    family_of = {} if families is None else {name: families.get(name, name) for _, _, name in faces}
 
     data_root = run_dir / "all_data"
     train_dir = data_root / names[0]
@@ -179,12 +192,17 @@ def render_corpus(
     train_rows, val_rows = [], []
     for index, line in enumerate(samples):
         needed = set(line)
-        eligible = [face for face, gaps in faces if not (gaps & needed)]
+        eligible = [(face, name) for face, gaps, name in faces if not (gaps & needed)]
         if not eligible:
             raise SystemExit(f"no font covers every character in {line!r}")
         is_val = index % 40 == 0
         for repeat in range(1 if is_val else repeats):
-            image = synth.render_word(line, rng.choice(eligible), jitter=rng)
+            if family_of:
+                family = rng.choice(sorted({family_of[name] for _, name in eligible}))
+                font = rng.choice([face for face, name in eligible if family_of[name] == family])
+            else:
+                font = rng.choice(eligible)[0]
+            image = synth.render_word(line, font, jitter=rng)
             if use_augment:
                 image = augment.degrade(image, rng)
             name = f"{index:06d}_{repeat}.png"
@@ -203,14 +221,20 @@ def render_corpus(
     return data_root, len(train_rows)
 
 
-def find_fonts() -> list[Path]:
-    """Every rendering face, with each one's charset gaps printed."""
+def find_fonts(font_dir: Path | None = None) -> list[Path]:
+    """Every rendering face, with each one's charset gaps printed.
+
+    By default the book faces under ``runs/v0/fonts`` plus Mshtakan from the
+    system. *font_dir* names another folder instead (brief 019's display
+    faces), and then only its faces are used.
+    """
     # .tt* catches TTF and TTC; the GHEA faces are OTF, which Pillow reads
     # just as happily and the original glob silently ignored.
-    font_dir = REPO / "runs" / "v0" / "fonts"
+    default = font_dir is None
+    font_dir = REPO / "runs" / "v0" / "fonts" if default else font_dir
     fonts = sorted([*font_dir.glob("*.tt*"), *font_dir.glob("*.otf")])
     system_font = Path("/System/Library/Fonts/Supplemental/Mshtakan.ttc")
-    if system_font.exists():
+    if default and system_font.exists():
         fonts.append(system_font)
     if not fonts:
         raise SystemExit("no fonts found")

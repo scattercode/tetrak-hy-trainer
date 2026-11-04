@@ -115,3 +115,39 @@ def test_render_word_produces_a_grey_crop_with_margin(tmp_path: Path) -> None:
     image = synth.render_word("արխիվ", ImageFont.truetype(FONT, 48))
     assert image.mode == "L"
     assert image.width > image.height > 40
+
+
+def _caps_only_copy(tmp_path: Path) -> str:
+    """Mshtakan with every lowercase Armenian letter mapped to its capital's
+    glyph: what a caps-only display face such as Oldtimer does."""
+    from fontTools.ttLib import TTFont
+
+    font = TTFont(FONT, fontNumber=0)
+    for table in font["cmap"].tables:
+        if table.isUnicode():
+            for capital in range(0x0531, 0x0557):
+                if capital in table.cmap and capital + 0x30 in table.cmap:
+                    table.cmap[capital + 0x30] = table.cmap[capital]
+    path = tmp_path / "caps.ttf"
+    font.save(str(path))
+    return str(path)
+
+
+@needs_font
+class TestCapsOnlyFaces:
+    """A caps-only face draws capitals at the lowercase code points, so a
+    lowercase line rendered in it would be labelled with letters the image
+    does not show. Brief 019's display faces include one (Oldtimer)."""
+
+    def test_an_ordinary_face_is_not_caps_only(self) -> None:
+        assert not synth.draws_capitals_for_lowercase(FONT)
+        assert synth.case_gaps(FONT) == frozenset()
+
+    def test_a_face_drawing_capitals_for_lowercase_is_caught(self, tmp_path: Path) -> None:
+        path = _caps_only_copy(tmp_path)
+        assert synth.draws_capitals_for_lowercase(path)
+
+    def test_its_lowercase_letters_count_as_missing(self, tmp_path: Path) -> None:
+        gaps = synth.case_gaps(_caps_only_copy(tmp_path))
+        assert {"ա", "ն", "ճ"} <= gaps
+        assert not gaps & {"Ա", "Ն", "1", ","}

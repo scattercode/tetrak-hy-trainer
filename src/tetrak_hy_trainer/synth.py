@@ -116,6 +116,55 @@ def missing_glyphs(font_path: str, characters: str) -> frozenset[str]:
     return frozenset(character for character in characters if ord(character) not in cmap)
 
 
+# Letters that sit at x-height in any ordinary face, with their capitals.
+# Armenian lowercase letters with ascenders or descenders (բ ե ի ր ք ղ) reach
+# the capitals' height in many faces and some geometric faces draw them
+# almost alike, so only letters that should be short can tell capitals apart.
+_CASE_PAIRS = ("աԱ", "ոՈ", "սՍ", "նՆ", "մՄ", "վՎ", "ռՌ")
+
+
+def _glyph_mask(font: ImageFont.FreeTypeFont, character: str) -> Image.Image:
+    """The glyph's ink, cropped to its box and scaled to 32 x 32."""
+    left, top, right, bottom = font.getbbox(character)
+    image = Image.new("L", (max(1, right - left), max(1, bottom - top)), 0)
+    ImageDraw.Draw(image).text((-left, -top), character, font=font, fill=255)
+    return image.resize((32, 32), Image.BILINEAR).point(lambda v: 255 if v > 127 else 0)
+
+
+@lru_cache
+def draws_capitals_for_lowercase(font_path: str) -> bool:
+    """Whether *font_path* draws capital forms at the lowercase code points.
+
+    Caps-only display faces (Oldtimer) fill the lowercase slots with their
+    capitals. A lowercase line rendered in one would be labelled with letters
+    the image does not show, so the renderer treats every lowercase letter
+    as missing from such a face (:func:`case_gaps`) and draws it only in
+    all-capital lines.
+
+    A pair in :data:`_CASE_PAIRS` counts as alike when the two glyphs have
+    nearly the same shape (scaled to the same box) and nearly the same
+    height; the face is caps-only when most pairs are alike. Small capitals
+    at the lowercase points are not caught, being shorter: none of brief
+    019's faces draws them, and their labels would be wrong only in case.
+    """
+    font = ImageFont.truetype(font_path, 64)
+    alike = 0
+    for small, capital in _CASE_PAIRS:
+        a, b = _glyph_mask(font, small), _glyph_mask(font, capital)
+        differing = sum(1 for x, y in zip(a.getdata(), b.getdata(), strict=True) if x != y)
+        small_box, capital_box = font.getbbox(small), font.getbbox(capital)
+        height = (small_box[3] - small_box[1]) / max(1, capital_box[3] - capital_box[1])
+        alike += differing / (32 * 32) < 0.05 and height > 0.9
+    return alike * 2 > len(_CASE_PAIRS)
+
+
+def case_gaps(font_path: str) -> frozenset[str]:
+    """The lowercase letters of the charset, for a caps-only face; else nothing."""
+    if not draws_capitals_for_lowercase(font_path):
+        return frozenset()
+    return frozenset(c for c in charset.character_list() if c.islower())
+
+
 def render_word(
     word: str,
     font: ImageFont.FreeTypeFont,
