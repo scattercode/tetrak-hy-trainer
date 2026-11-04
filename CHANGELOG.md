@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-11-04
+
+### Changed
+
+- Bump ruff from 0.16.8 to 0.16.9 (#27)
+- Bump torchvision from 0.29.0 to 0.29.1 (#26)
+- Bump fonttools from 4.66.0 to 4.66.1 (#25)
+- Bump torch from 2.14.0 to 2.14.1 (#28)
+- Move the house rules to AGENTS.md for any coding agent (#31)
+- Bump ruff from 0.16.9 to 0.16.10 (#32)
+- Bump fonttools from 4.66.1 to 4.67.0 (#53)
+- Bump ruff from 0.16.10 to 0.17.0 (#54)
+- Move the lock past the pillow, filelock and certifi advisories (#60)
+- Bump setuptools from 84.0.0 to 84.1.0 (#57)
+- Bump ruff from 0.17.0 to 0.17.2 (#58)
+- Bump nltk from 3.10.3 to 3.10.4 (#59)
+- Bump pandas from 3.0.6 to 3.1.0 (#65)
+- Bump torch from 2.14.1 to 2.15.0 (#64)
+- Bump pytest from 9.1.1 to 9.2.0 (#63)
+- Bump ruff from 0.17.2 to 0.17.3 (#62)
+- Bump torchvision from 0.29.1 to 0.29.2 (#61)
+- Grant permissions per job and pass the branch through env (#67)
+- Display faces and a face-held-out test set for modern print (#68)
+
 ## [0.7.0] - 2026-10-05
 
 ### Changed
