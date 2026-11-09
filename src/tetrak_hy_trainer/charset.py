@@ -51,8 +51,7 @@ Composition
   model a new homoglyph to confuse with the en dash.
 - v2 additions (:data:`V2_ADDITIONS`): U+2024 ONE DOT LEADER, the ASE
   transcripts' abbreviation dot (``Ա․``, ``Գրկ․``), and ``°``. v1's error
-  analysis (``tetrak`` repo, ``product/research/
-  armenian-v1-error-analysis.md``) found U+2024 absent from v1's charset
+  analysis (design research 010) found U+2024 absent from v1's charset
   entirely, so the training pipeline's "drop any crop containing an
   out-of-charset character" step silently filtered every crop containing
   it and v1 could never emit it at all — 518 words (5.8% of the ten

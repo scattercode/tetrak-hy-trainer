@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Cut labelled training crops from real scans, via detection-assisted alignment.
 
-Brief 011 Stage 3 step 2. v1's error analysis (tetrak,
-``product/research/armenian-v1-error-analysis.md``) left one lever that
+Brief 011 Stage 3 step 2. v1's error analysis (design research 010) left one lever that
 no amount of rendering can pull: a cluster of *shape* confusions on
 degraded 1970s letterpress -- ``հ``→``խ``, ``խ``→``ի``, ``տ``→``ո``,
 ``ճ``↔``ջ``, concentrated on ``հ``, one of the commonest Armenian

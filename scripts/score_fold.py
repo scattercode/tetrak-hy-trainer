@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Re-score v1's saved predictions with the script-consistency fold.
 
-The v1 error analysis (tetrak's
-product/research/armenian-v1-error-analysis.md) found that roughly half
+The v1 error analysis (design research 010) found that roughly half
 of v1's 0.500-vs-0.662 word-recall gap against `tesseract -l hye` is
 mechanical rather than a recognition failure, and measured how much of
 it two fixes recover on the *predicted* side alone, with no retraining:
