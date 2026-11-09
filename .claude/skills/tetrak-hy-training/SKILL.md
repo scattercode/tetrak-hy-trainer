@@ -31,10 +31,10 @@ in both cases including `ё`/`Ё`, 67 classes; `num_class` 179 → 246, brief
 014 Stage 1, 2026-11-09). They ship together with the v7 run. Delete this
 section once that model is released.
 
-- [ ] **Cyrillic faces** (step 4, brief 014 issue #40). Run the glyph guard
-      for the v5 letters on every render face before any synthetic set:
-      Mshtakan has no Cyrillic and the GHEA faces are unchecked. Record the
-      faces excluded from mixed-script lines.
+- [x] **Cyrillic faces** (step 4, brief 014 issue #40). Done 9 November
+      2026: the twelve GHEA and Arnamu book faces draw the Russian alphabet,
+      the three others do not and the per-line guard keeps them off Cyrillic
+      lines. The lists are under step 4.
 - [ ] **Mixed-script tokens** (step 6, issue #43). A token mixing Cyrillic
       with Armenian or Latin letters is dropped at crop harvest, not taught;
       a token that is all Cyrillic is kept now, where v5/v6 dropped it.
@@ -152,6 +152,19 @@ charset. Gaps are expected and handled — the renderer excludes a face from any
 line it cannot fully draw — but they should be seen, not discovered. All eight
 GHEA faces lack U+2024; Mshtakan (macOS system font) lacks Latin `A`/`x` and
 both v2 additions.
+
+**Cyrillic and the apostrophe (brief 014, checked 9 November 2026).** Of the
+fifteen book faces, the eight GHEA and the four Arnamu faces draw the whole
+Russian alphabet including `ё`/`Ё`; a rendered sheet confirmed the glyphs are
+real Cyrillic, italics included, not fallback boxes. Noto Sans Armenian, Noto
+Serif Armenian and Mshtakan have none, so the per-line guard keeps them off
+any line with a Russian word; no face needed adding. Every book face draws the
+apostrophe `՚`. Of the 128 display faces (brief 019), 68 have no Cyrillic and
+19 lack the apostrophe (the Braind, Nicolo, Nortar and Yerevanyan families
+and the two Grqalir bold faces); the same guard handles them, and a family
+with no eligible face is simply never picked for that line. The reports from
+`fetch_fonts.py` and `find_fonts` say "the Russian alphabet" rather than
+listing 66 letters, so a single unexpected gap still stands out.
 
 **Display faces (brief 019)** are a separate set, so the pre-train's faces
 never change by accident:

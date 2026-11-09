@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from tetrak_hy_trainer import synth
+from tetrak_hy_trainer import charset, synth
 
 FONT = "/System/Library/Fonts/Supplemental/Mshtakan.ttc"
 
@@ -92,6 +92,32 @@ class TestMissingGlyphs:
 
     def test_empty_input_has_nothing_missing(self) -> None:
         assert synth.missing_glyphs(FONT, "") == frozenset()
+
+    def test_mshtakan_has_no_cyrillic_but_draws_the_apostrophe(self) -> None:
+        """Brief 014: charset v5 adds the Russian alphabet, which Mshtakan
+        lacks entirely, so the per-line guard keeps it off every line with
+        a Russian word; the apostrophe of elision it does draw."""
+        cyrillic = charset.CYRILLIC_UPPER + charset.CYRILLIC_LOWER
+        assert len(synth.missing_glyphs(FONT, cyrillic)) == 66
+        assert synth.missing_glyphs(FONT, "՚") == frozenset()
+
+
+class TestDescribeGaps:
+    """The font reports name the Russian alphabet rather than list it."""
+
+    CYRILLIC = frozenset(charset.CYRILLIC_UPPER + charset.CYRILLIC_LOWER)
+
+    def test_the_whole_russian_alphabet_is_named_not_listed(self) -> None:
+        assert synth.describe_gaps(self.CYRILLIC) == "the Russian alphabet"
+
+    def test_other_gaps_are_listed_after_it(self) -> None:
+        assert synth.describe_gaps(self.CYRILLIC | {"․", "°"}) == "the Russian alphabet, '°․'"
+
+    def test_a_partial_cyrillic_gap_is_listed_letter_by_letter(self) -> None:
+        assert synth.describe_gaps(frozenset("Ж")) == "'Ж'"
+
+    def test_no_gaps(self) -> None:
+        assert synth.describe_gaps(frozenset()) == "nothing"
 
 
 @needs_font

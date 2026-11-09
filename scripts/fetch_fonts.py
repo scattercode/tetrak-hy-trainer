@@ -171,7 +171,7 @@ def main() -> int:
     full = charset.character_list()
     for path in sorted([*FONT_DIR.glob("*.tt*"), *FONT_DIR.glob("*.otf")]):
         gaps = synth.missing_glyphs(str(path), full)
-        coverage = "full" if not gaps else f"missing {''.join(sorted(gaps))!r}"
+        coverage = "full" if not gaps else f"missing {synth.describe_gaps(gaps)}"
         print(f"{path.name:<26} {fontsource.licence_of(path).splitlines()[0][:44]:<44} {coverage}")
     return 0
 

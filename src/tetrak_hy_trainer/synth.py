@@ -165,6 +165,26 @@ def case_gaps(font_path: str) -> frozenset[str]:
     return frozenset(c for c in charset.character_list() if c.islower())
 
 
+def describe_gaps(gaps: frozenset[str]) -> str:
+    """*gaps* as a short phrase for a report.
+
+    A face with no Cyrillic at all is the common case since charset v5
+    (brief 014): Noto Sans and Serif Armenian, Mshtakan and about half of
+    the display faces. Listing sixty-six letters for each would bury the
+    one unexpected gap, so the whole Russian alphabet collapses to its
+    name and anything else is listed, sorted, after it.
+    """
+    cyrillic = frozenset(charset.CYRILLIC_UPPER + charset.CYRILLIC_LOWER)
+    rest = set(gaps)
+    parts = []
+    if cyrillic <= rest:
+        parts.append("the Russian alphabet")
+        rest -= cyrillic
+    if rest:
+        parts.append(repr("".join(sorted(rest))))
+    return ", ".join(parts) if parts else "nothing"
+
+
 def render_word(
     word: str,
     font: ImageFont.FreeTypeFont,
