@@ -35,11 +35,11 @@ section once that model is released.
       2026: the twelve GHEA and Arnamu book faces draw the Russian alphabet,
       the three others do not and the per-line guard keeps them off Cyrillic
       lines. The lists are under step 4.
-- [ ] **Mixed-script tokens** (step 6, issue #43). The synthetic sampler
-      drops a token mixing Cyrillic with Armenian or Latin letters since
-      9 November 2026 (`charset.mixes_cyrillic`); the crop harvester must do
-      the same at re-harvest. A token that is all Cyrillic is kept, where
-      v5/v6 dropped it.
+- [x] **Mixed-script tokens** (step 6, issue #43). Done 9 November 2026:
+      the synthetic sampler and the crop harvester both drop a token mixing
+      Cyrillic with Armenian or Latin letters (`charset.mixes_cyrillic`),
+      the harvester with its whole crop. A token that is all Cyrillic is
+      kept, where v5/v6 dropped it; `summary.json` counts both.
 
 - [x] **Refresh every harvest's transcripts first.** Done 9 November 2026:
       every page of the 58 harvests is at cleaning 3, except two blank
@@ -58,7 +58,10 @@ section once that model is released.
       anything but 246.
 - [ ] **Re-harvest every real-crop set** (step 6). Crops harvested under v3
       carry `«` where the page prints `<`, and relabelling cannot restore it;
-      `finetune_real.py` refuses an unstamped `real_*` folder.
+      `finetune_real.py` refuses an unstamped `real_*` folder. Started the
+      night of 9 November 2026 into `runs/v7-b014/all_data` from the sixteen
+      v6-b013 sources plus the classical sources at 1280 px and above
+      (issue #43); the per-source yields are in its `summary.json`.
 - [ ] **Rebuild the word list** (step 9). It picks the change up on its own,
       but only if it is rebuilt rather than reused from v6.
 - [ ] **Check the confusion table** (step 8) for `<` against `«`, `³`
@@ -276,6 +279,43 @@ teaches the wrong shape, so it fails closed.
   transcript, so more crops survive alignment.
 - `bracketed` tier is off by default: spot-checking put its precision near
   half. Add it only with the `crops.csv` review in hand.
+
+**Cyrillic and mixed tokens (brief 014).** Under charset v5 a crop whose
+label has an all-Cyrillic token is kept (v5 and v6 had no class for it and
+dropped every such crop), and a crop with a token mixing Cyrillic with
+Armenian or Latin letters is dropped whole, as the synthetic sampler drops
+the token. Both are counted per page and per source in `summary.json`
+(`cyrillic`, `mixed_dropped`), and the per-page log line says how many
+columns the page split into.
+
+**Classical sources (brief 014, issue #43).** The classical harvests were
+taken text-only; `--images --image-width 3840 --limit 50` on each existing
+harvest tops up fifty scans at the native width (the server clamps 3840 to
+it) without refetching wikitext. `--limit` takes pages in the API's title
+order (p1, p10, p100, …), which scatters them through the book rather than
+taking the front matter. Sources whose scans come back under 1280 px (Gorts
+and the Bhagavad Gita at 960 px; the census lists four more at 500 px) stay
+text supply for the sampler and contribute no crops; `runs/v7-b014/
+harvest-crops.sh` checks the width of each directory's scans before
+passing it. *Հայկական տպագրութիւն* is a history of printing whose specimen
+pages vary more than a fine-tune wants: fifty pages of it is the sample the
+brief asks for, not the whole.
+
+**Columns (brief 014, issue #43; brief 013's Stage 4 note).** The
+encyclopedia and the medical encyclopedia are set in *three* close-set
+columns, and `align`'s single-gutter search on raw boxes found at most one
+gutter on them (on a third of the pages, none), so every such page was read
+partly straight across and the alignment kept 30% of its boxes against
+80% on single-column books. `align.columns` now trims each box by a quarter
+of a line height before looking for a gutter, sweeps the trimmed edges
+rather than sampling, tries candidates emptiest and widest first, refuses a
+split that leaves a sliver (a critical apparatus's line-number column), and
+recurses, so a three-column page splits twice. Measured on identical cached
+detections from 26 pages (`runs/v7-b014/gutter-comparison.txt`): the
+seventeen encyclopedia pages went from 2,796 to 5,204 crops of 9,337 boxes
+(0.30 → 0.56); the nine single- and two-column book and dictionary pages
+kept exactly the same crops. This is Tetrak's `layout._vertical_cut`
+ported; the two modules are twins and a fix to either belongs in both.
 
 ## 7. Fine-tune on real crops
 

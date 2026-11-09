@@ -109,6 +109,61 @@ class TestFindGutter:
         assert align.find_gutter(spans) is None
 
 
+def three_columns(overhang: float = 3) -> list[Detection]:
+    """Three close-set columns whose boxes overhang the gutters by their
+    padding, as CRAFT draws them on the encyclopedia's pages."""
+    detections = []
+    for row in range(10):
+        top = 100 + row * 30
+        detections.append(Detection(f"A{row}", box(100, top, 300 + overhang, top + 20)))
+        detections.append(Detection(f"B{row}", box(300 - overhang, top, 500 + overhang, top + 20)))
+        detections.append(Detection(f"C{row}", box(500 - overhang, top, 700, top + 20)))
+    return detections
+
+
+class TestColumns:
+    def test_three_close_set_columns_split_twice(self) -> None:
+        """No x is free of raw boxes, since each column's padding reaches
+        into the gutter; trimmed by a quarter of a line height both gutters
+        are clear, and the recursion finds the second one."""
+        found = align.columns(three_columns())
+        assert [sorted(d.text[0] for d in column) for column in found] == [
+            ["A"] * 10,
+            ["B"] * 10,
+            ["C"] * 10,
+        ]
+
+    def test_overhanging_boxes_are_kept_not_dropped(self) -> None:
+        """A box crossing a gutter by its padding alone belongs to its column."""
+        ordered = align.column_order(three_columns())
+        assert len(ordered) == 30
+        assert [d.text for d in ordered[:10]] == [f"A{row}" for row in range(10)]
+        assert [d.text for d in ordered[-10:]] == [f"C{row}" for row in range(10)]
+
+    def test_a_genuine_straddler_is_still_dropped(self) -> None:
+        detections = three_columns()
+        detections.append(Detection("HEADER", box(100, 40, 700, 60)))
+        ordered = align.column_order(detections)
+        assert "HEADER" not in [d.text for d in ordered]
+        assert len(ordered) == 30
+
+    def test_a_label_column_is_not_split_off(self) -> None:
+        """A critical apparatus sets a narrow column of line numbers beside
+        the full measure; the transcript writes each row as one line, so
+        splitting there would desynchronise every row."""
+        detections = []
+        for row in range(10):
+            top = 100 + row * 30
+            detections.append(detection(f"N{row}", 100, top, width=100))
+            detections.append(detection(f"T{row}", 260, top, width=440))
+        assert align.find_gutter(detections) is None
+        assert len(align.columns(detections)) == 1
+
+    def test_a_single_column_is_one_region(self) -> None:
+        spans = [detection("ա", 100, 100 + row * 30, width=500) for row in range(10)]
+        assert align.columns(spans) == [spans]
+
+
 class TestColumnOrder:
     def test_columns_are_read_one_after_the_other(self) -> None:
         """Not straight across the gutter, which is what grouping by

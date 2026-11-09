@@ -45,6 +45,18 @@ The split is by **page**, not by crop: crops from one page share its
 paper, ink and scanning, so splitting within a page would let the
 validation set measure memorisation.
 
+Under charset v5 (brief 014) a token that is all Cyrillic is kept -- v5
+and v6 dropped every crop with a Russian word, since the charset had no
+class for it -- and a token mixing Cyrillic with Armenian or Latin
+letters is dropped with its crop, as the synthetic sampler drops it:
+the token's script is decided by its letters, and a mixed token has no
+script (:func:`tetrak_hy_trainer.charset.mixes_cyrillic`). Pages are
+split into columns by :func:`tetrak_hy_trainer.align.columns`, which
+finds the gutters of three-column pages on trimmed boxes; the number of
+columns found is reported per page, and ``summary.json`` carries the
+yield per source, so a page shape the alignment loses shows up as a
+source whose yield sits far below the others.
+
 Prerequisites: easyocr and torch. The trainer's own venv has neither
 (they are the ``[train]`` extra), so the sibling library's venv is the
 convenient one::
@@ -264,6 +276,24 @@ def is_line_break_fragment(crop: align.AlignedCrop) -> bool:
     return bool(read) and read[-1] in _TRAILING_DASHES and crop.label[-1] not in _TRAILING_DASHES
 
 
+def has_mixed_script_token(label: str) -> bool:
+    """Whether any token of *label* mixes Cyrillic with Armenian or Latin.
+
+    Brief 014 Stage 0.3: a token's script is decided by its letters, and
+    a token with letters of two scripts has none. The synthetic sampler
+    drops such tokens, so the real crops must too, or the fine-tune would
+    teach a mixture the lexicon can never hold. Checked on the label,
+    which is what reaches training.
+    """
+    return any(charset.mixes_cyrillic(token) for token in label.split())
+
+
+def has_cyrillic_token(label: str) -> bool:
+    """Whether any token of *label* is written in Cyrillic -- the crops
+    v5 and v6 never saw, counted so the yield of them is on record."""
+    return any("cyrillic" in charset.scripts_of(token) for token in label.split())
+
+
 def usable(
     crop: align.AlignedCrop,
     allowed: set[str],
@@ -374,6 +404,10 @@ def main() -> int:
     rows = {"train": [], "val": []}
     review: list[dict] = []
     totals = dict.fromkeys(Tier, 0)
+    cyrillic_kept = 0
+    mixed_dropped = 0
+    per_source: dict[str, dict[str, int]] = {}
+    page_stats: dict[str, dict[str, int]] = {}
     started = time.time()
 
     for position, page in enumerate(pages):
@@ -397,11 +431,17 @@ def main() -> int:
 
         image = Image.open(page["image_path"])
         kept = 0
+        page_mixed = 0
+        page_cyrillic = 0
         for index, crop in enumerate(crops):
             if crop.tier not in tiers:
                 continue
+            if has_mixed_script_token(crop.label):
+                page_mixed += 1
+                continue
             if not usable(crop, allowed, args.max_label_length, median_height):
                 continue
+            page_cyrillic += has_cyrillic_token(crop.label)
             filename = f"{page['source']}_{page['page_number']:04d}_{index:04d}.png"
             cut(image, crop.bbox, args.margin_fraction).save(folders[split] / filename)
             rows[split].append((filename, crop.label))
@@ -424,12 +464,33 @@ def main() -> int:
             )
         image.close()
 
+        cyrillic_kept += page_cyrillic
+        mixed_dropped += page_mixed
+        column_count = len(align.columns(detections))
+        page_stats[f"{page['source']}/{page['page_number']}"] = {
+            "boxes": len(detections),
+            "crops": kept,
+            "columns": column_count,
+            "cyrillic": page_cyrillic,
+            "mixed_dropped": page_mixed,
+        }
+        source = per_source.setdefault(
+            page["source"],
+            {"pages": 0, "boxes": 0, "crops": 0, "cyrillic": 0, "mixed_dropped": 0},
+        )
+        source["pages"] += 1
+        source["boxes"] += len(detections)
+        source["crops"] += kept
+        source["cyrillic"] += page_cyrillic
+        source["mixed_dropped"] += page_mixed
+
         counts = align.tier_counts(crops)
         print(
             f"  {page['source']} p{page['page_number']} [{split}] "
-            f"{len(detections)} boxes -> "
+            f"{len(detections)} boxes, {column_count} col -> "
             f"{kept} crops (exact {counts[Tier.EXACT]}, near {counts[Tier.NEAR]}, "
-            f"bracketed {counts[Tier.BRACKETED]})",
+            f"bracketed {counts[Tier.BRACKETED]}; cyrillic {page_cyrillic}, "
+            f"mixed dropped {page_mixed})",
             flush=True,
         )
 
@@ -478,7 +539,12 @@ def main() -> int:
             "train": len(rows["train"]),
             "val": len(rows["val"]),
             **{tier.value: count for tier, count in totals.items()},
+            "cyrillic": cyrillic_kept,
+            "mixed_dropped": mixed_dropped,
         },
+        "charset_size": len(charset.character_list()),
+        "per_source": per_source,
+        "page_stats": page_stats,
     }
     (args.out / "summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8"
@@ -492,6 +558,17 @@ def main() -> int:
     )
     for tier, count in totals.items():
         print(f"  {tier.value}: {count}", flush=True)
+    print(f"  with a Cyrillic token: {cyrillic_kept}", flush=True)
+    print(f"  dropped for a mixed-script token: {mixed_dropped}", flush=True)
+    print("\nper source (pages, boxes, crops, yield):", flush=True)
+    for name, stats in sorted(per_source.items()):
+        share = stats["crops"] / stats["boxes"] if stats["boxes"] else 0.0
+        print(
+            f"  {name}: {stats['pages']} pages, {stats['boxes']} boxes, "
+            f"{stats['crops']} crops ({share:.2f}), cyrillic {stats['cyrillic']}, "
+            f"mixed dropped {stats['mixed_dropped']}",
+            flush=True,
+        )
     return 0 if total else 1
 
 
