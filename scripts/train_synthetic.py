@@ -46,6 +46,7 @@ from tetrak_hy_trainer import (  # noqa: E402
     augment,
     charset,
     heldout,
+    orthography,
     packaging,
     sampling,
     synth,
@@ -54,8 +55,17 @@ from tetrak_hy_trainer import (  # noqa: E402
 )
 
 
-def clean_token_runs(harvest_dirs: list[Path]) -> list[list[str]]:
+def clean_token_runs(
+    harvest_dirs: list[Path],
+) -> tuple[list[tuple[list[str], bool]], dict[str, str]]:
     """Runs of consecutive charset-clean tokens, per stretch of page text.
+
+    Each run comes with whether its harvest reads as classical orthography,
+    decided by :mod:`tetrak_hy_trainer.orthography` over the harvest's
+    own non-held-out text at sampling time (brief 014): a line of a few
+    tokens cannot be read on its own, a volume can, and titles mislead.
+    The second value is every harvest's verdict by folder name, for the
+    log and the recipe.
 
     Held-out pages are skipped: rendering an evaluation page's transcript
     as synthetic training data would let the model memorise the exact
@@ -65,12 +75,15 @@ def clean_token_runs(harvest_dirs: list[Path]) -> list[list[str]]:
     import json
 
     allowed = set(charset.character_list())
-    runs: list[list[str]] = []
+    runs: list[tuple[list[str], bool]] = []
+    verdicts: dict[str, str] = {}
     for harvest_dir in harvest_dirs:
         manifest = harvest_dir / "manifest.json"
         index_title = (
             json.loads(manifest.read_text(encoding="utf-8"))["index"] if manifest.exists() else ""
         )
+        here: list[list[str]] = []
+        pages: list[str] = []
         for text_file in sorted((harvest_dir / "text").glob("*.txt")):
             if index_title and heldout.page_is_held_out(index_title, int(text_file.stem)):
                 continue
@@ -82,6 +95,7 @@ def clean_token_runs(harvest_dirs: list[Path]) -> list[list[str]]:
             page_text = wikisource.normalise_transcript(
                 text_file.read_text(encoding="utf-8"), index_title
             )
+            pages.append(page_text)
             for token in page_text.split():
                 # A token mixing Cyrillic with Armenian or Latin letters
                 # breaks the run like a stray: brief 014's Stage 0.3
@@ -93,11 +107,15 @@ def clean_token_runs(harvest_dirs: list[Path]) -> list[list[str]]:
                 ):
                     current.append(token)
                 elif current:
-                    runs.append(current)
+                    here.append(current)
                     current = []
             if current:
-                runs.append(current)
-    return runs
+                here.append(current)
+        marks = orthography.markers("\n".join(pages))
+        verdicts[harvest_dir.name] = marks.verdict
+        print(f"  {harvest_dir.name}: {marks.verdict} (ւ {marks.free_yiwn:.1f}/1000)", flush=True)
+        runs.extend((run, marks.verdict == orthography.CLASSICAL) for run in here)
+    return runs, verdicts
 
 
 def build_line_samples(
@@ -107,31 +125,47 @@ def build_line_samples(
     tokens_max: int,
     chars_max: int = 30,
     mixed_share: float = 0.0,
+    classical_share: float = 0.0,
+    report: dict | None = None,
 ) -> list[str]:
     """Sample text lines: 1..tokens_max consecutive tokens, length-capped.
 
     One candidate per token position (with a random length draw), sampled
     down to *max_samples* — so common vocabulary appears at natural
     frequency and every page contributes. *mixed_share* lifts the lines
-    that mix Armenian and Cyrillic tokens to that fraction of the sample
-    (brief 014); zero keeps the natural rate and the draws unchanged.
+    that mix Armenian and Cyrillic tokens, and *classical_share* the lines
+    from classical-orthography harvests, to those fractions of the sample
+    (brief 014, :func:`tetrak_hy_trainer.sampling.compose`); zero keeps
+    the natural rate and the draws unchanged. *report*, if given, is
+    filled with the counts and the harvests' verdicts for the recipe.
     """
-    candidates: list[str] = []
-    for run in clean_token_runs(harvest_dirs):
+    runs, verdicts = clean_token_runs(harvest_dirs)
+    candidates: list[sampling.Candidate] = []
+    for run, classical in runs:
         for start in range(len(run)):
             take = rng.randint(1, tokens_max)
             line = " ".join(run[start : start + take])
             if len(line) <= chars_max:
-                candidates.append(line)
+                candidates.append(sampling.Candidate(line, classical))
     if len(candidates) < 1000:
         raise SystemExit(f"only {len(candidates)} line candidates -- harvest more text first")
-    samples, mixed = sampling.with_mixed_share(candidates, max_samples, rng, mixed_share)
-    wanted = round(max_samples * mixed_share)
-    print(
-        f"mixed-script lines: {mixed} of {len(samples)}"
-        + (f" ({wanted} wanted)" if mixed < wanted else ""),
-        flush=True,
+    samples, counts = sampling.compose(
+        candidates, max_samples, rng, mixed_share=mixed_share, classical_share=classical_share
     )
+    for kind, share in (("mixed", mixed_share), ("classical", classical_share)):
+        wanted = round(max_samples * share)
+        print(
+            f"{kind} lines: {counts[kind]} of {len(samples)}"
+            + (f" ({wanted} wanted)" if counts[kind] < wanted else ""),
+            flush=True,
+        )
+    if report is not None:
+        report.update(
+            mixed_lines=counts["mixed"],
+            classical_lines=counts["classical"],
+            classical_sources=sorted(n for n, v in verdicts.items() if v == orthography.CLASSICAL),
+            source_verdicts=verdicts,
+        )
     return samples
 
 
@@ -318,6 +352,12 @@ def main() -> int:
         default=0.0,
         help="this fraction of lines mix Armenian and Cyrillic tokens (brief 014); 0 is the natural rate",
     )
+    parser.add_argument(
+        "--classical-share",
+        type=float,
+        default=0.25,
+        help="this fraction of lines from classical-orthography harvests (brief 014); 0 is the natural rate",
+    )
     parser.add_argument("--min-size", type=int, default=18)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--val-interval", type=int, default=2_000)
@@ -352,8 +392,15 @@ def main() -> int:
 
     started = time.time()
     rng = random.Random(0)
+    report: dict = {}
     samples = build_line_samples(
-        harvest_dirs, args.max_samples, rng, args.line_tokens_max, mixed_share=args.mixed_share
+        harvest_dirs,
+        args.max_samples,
+        rng,
+        args.line_tokens_max,
+        mixed_share=args.mixed_share,
+        classical_share=args.classical_share,
+        report=report,
     )
     print(f"line samples: {len(samples)}", flush=True)
 
@@ -368,10 +415,11 @@ def main() -> int:
         max_samples=args.max_samples,
         line_tokens_max=args.line_tokens_max,
         mixed_share=args.mixed_share,
-        mixed_lines=sum(1 for line in samples if sampling.is_mixed_line(line)),
+        classical_share=args.classical_share,
         lines=len(samples),
         repeats=args.repeats,
         seed=0,
+        **report,
     )
 
     config = train_config.build_config(

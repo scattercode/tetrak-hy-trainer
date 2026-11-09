@@ -52,8 +52,10 @@ section once that model is released.
       `runs/v0/harvest` and `runs/v1/harvest-*`: the crop harvester refuses
       stale pages, and the synthetic sampler and word list, which do not,
       would otherwise never see a printed `<`.
-- [ ] **Fresh synthetic pre-train** (step 5). v6 and every earlier checkpoint
-      has a 175-class head; `finetune_real.py` refuses anything but 246.
+- [ ] **Fresh synthetic pre-train** (step 5), with every harvest passed and
+      the `--classical-share` and `--mixed-share` recorded. v6 and every
+      earlier checkpoint has a 175-class head; `finetune_real.py` refuses
+      anything but 246.
 - [ ] **Re-harvest every real-crop set** (step 6). Crops harvested under v3
       carry `«` where the page prints `<`, and relabelling cannot restore it;
       `finetune_real.py` refuses an unstamped `real_*` folder.
@@ -226,6 +228,25 @@ them. Tokens mixing Cyrillic with Armenian or Latin letters are dropped
 (`charset.mixes_cyrillic`); wholly Cyrillic tokens stay. Each rendered set
 writes `recipe.json` beside its labels with the share asked and the mixed
 lines it got: copy both into the `VERSIONS` entry.
+
+**Classical text (brief 014).** `--classical-share` sets the fraction of
+lines drawn from classical-orthography harvests: `0.25` by default on the
+pre-train, `0` on `render_synthetic_set.py` so brief 019's seeded sets stay
+reproducible. A harvest is classical by its own text: the sampler runs
+`orthography.classify` over its non-held-out pages at sampling time, prints
+the verdict per harvest and records it in `recipe.json`, because a line of a
+few tokens cannot be read on its own and titles mislead. On 9 November 2026
+that is 33 classical harvests (6,440 pages), 3 mixed (which count as neither)
+and 22 reformed. **Pass every harvest** (`runs/harvest/* runs/v0/harvest
+runs/v1/harvest-*`): the script's default directories are the encyclopedia
+volumes alone, all reformed, and a classical share with no classical source
+is a printed shortfall, not an error. A share that is set is exact; with every
+harvest passed the natural rate is already close to a quarter, and the share
+holds it there whatever the mix of sources. Measured 9 November 2026 on a
+60,000-line sample over every harvest: free-standing `ւ` 5.4 per thousand
+Armenian letters at the natural rate (28% classical lines) and 4.8 at a
+quarter, against about 0.3 in reformed text alone and 17 in classical, so a
+sample's `orthography.markers` tells you at once whether the share took.
 
 **The charset diff under v5 (9 November 2026).** Six of the 58 harvests are
 clean; the residual in the rest is wiki and maths markup (`_ \ { } ^ | ~`,
