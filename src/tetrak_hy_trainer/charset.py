@@ -146,6 +146,12 @@ CYRILLIC_UPPER = "".join(chr(code) for code in range(0x0410, 0x042F + 1)) + "Ё"
 CYRILLIC_LOWER = "".join(chr(code) for code in range(0x0430, 0x044F + 1)) + "ё"  # а–я, ё
 V5_ADDITIONS = ARMENIAN_APOSTROPHE + CYRILLIC_UPPER + CYRILLIC_LOWER
 
+# The letter sets the per-token script policy reads. Punctuation, digits
+# and the ligature's neighbours decide nothing; letters do.
+ARMENIAN_LETTERS = frozenset(ARMENIAN_UPPER + ARMENIAN_LOWER + ARMENIAN_EW_LIGATURE)
+CYRILLIC_LETTERS = frozenset(CYRILLIC_UPPER + CYRILLIC_LOWER)
+LATIN_LETTERS = frozenset(LATIN)
+
 # Settled at spike time against what the EasyOCR trainer actually expects,
 # and baked into every released model since v0. Not a switch to flip: see
 # the module docstring.
@@ -186,6 +192,37 @@ def character_list(include_space: bool | None = None) -> str:
 def num_class(include_space: bool | None = None) -> int:
     """The CTC output size: every character plus the blank token at index 0."""
     return len(character_list(include_space)) + 1
+
+
+def scripts_of(token: str) -> frozenset[str]:
+    """Which alphabets *token* has letters from.
+
+    A subset of ``{"armenian", "cyrillic", "latin"}``; digits and
+    punctuation count for nothing, so ``"1974․"`` is of no script.
+    """
+    letters = set(token)
+    found = set()
+    if letters & ARMENIAN_LETTERS:
+        found.add("armenian")
+    if letters & CYRILLIC_LETTERS:
+        found.add("cyrillic")
+    if letters & LATIN_LETTERS:
+        found.add("latin")
+    return frozenset(found)
+
+
+def mixes_cyrillic(token: str) -> bool:
+    """Whether *token* mixes Cyrillic with Armenian or Latin letters.
+
+    The Stage 0.3 policy (brief 014, 2026-10-08): a token is Cyrillic if
+    its letters are, and one that mixes Cyrillic with another alphabet --
+    a formula, a transcriber's slip, a lookalike typed from the wrong
+    keyboard (``Mосква`` with a Latin M) -- is dropped from training rather
+    than taught, because no label for it is right. Across the harvests
+    that is 770 tokens against 47,000 wholly Cyrillic ones.
+    """
+    found = scripts_of(token)
+    return "cyrillic" in found and len(found) > 1
 
 
 def strays(text: str) -> Counter[str]:

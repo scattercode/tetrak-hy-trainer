@@ -108,6 +108,27 @@ def test_cyrillic_lookalikes_are_their_own_classes() -> None:
         assert characters.index(latin) != characters.index(cyrillic)
 
 
+class TestTokenScript:
+    """Brief 014 Stage 0.3: a token's script is decided by its letters."""
+
+    def test_scripts_are_read_from_letters_only(self) -> None:
+        assert charset.scripts_of("Գրկ․") == {"armenian"}
+        assert charset.scripts_of("Исраэлян") == {"cyrillic"}
+        assert charset.scripts_of("Lazarev,") == {"latin"}
+        assert charset.scripts_of("1974․") == frozenset()
+
+    def test_a_wholly_cyrillic_token_is_kept(self) -> None:
+        assert not charset.mixes_cyrillic("Москва")
+        assert not charset.mixes_cyrillic("«Смена»")
+
+    def test_a_token_mixing_cyrillic_with_another_alphabet_is_dropped(self) -> None:
+        assert charset.mixes_cyrillic("Mосква")  # Latin M, the keyboard slip
+        assert charset.mixes_cyrillic("Иսրաէլ")
+
+    def test_armenian_with_latin_is_not_this_policy_s_business(self) -> None:
+        assert not charset.mixes_cyrillic("Ե․-Yerevan")
+
+
 def test_strays_counts_out_of_charset_characters() -> None:
     """The check that would have caught U+2024 before it cost a training
     run: count what the corpus contains that the charset cannot emit."""

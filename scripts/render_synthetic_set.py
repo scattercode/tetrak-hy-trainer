@@ -62,7 +62,7 @@ from train_synthetic import (  # noqa: E402
     upper_case_line,
 )
 
-from tetrak_hy_trainer import charset  # noqa: E402
+from tetrak_hy_trainer import charset, sampling  # noqa: E402
 
 
 def page_number(rng: random.Random) -> str:
@@ -119,6 +119,12 @@ def main() -> int:
     parser.add_argument(
         "--upper-share", type=float, default=0.0, help="this fraction of lines in capitals"
     )
+    parser.add_argument(
+        "--mixed-share",
+        type=float,
+        default=0.0,
+        help="this fraction of lines mix Armenian and Cyrillic tokens (brief 014); 0 is the natural rate",
+    )
     parser.add_argument("--seed", type=int, default=13)
     args = parser.parse_args()
 
@@ -128,7 +134,9 @@ def main() -> int:
 
     started = time.time()
     rng = random.Random(args.seed)
-    samples = build_line_samples(harvest_dirs, args.max_samples, rng, args.line_tokens_max)
+    samples = build_line_samples(
+        harvest_dirs, args.max_samples, rng, args.line_tokens_max, mixed_share=args.mixed_share
+    )
     if args.index:
         # Single words from the same text are the entries; the shapes around
         # them are generated, since running text has almost no page lists.
@@ -170,6 +178,20 @@ def main() -> int:
         seed=args.seed,
         names=(f"{args.name}_train", f"{args.name}_val"),
         families=families,
+    )
+    sampling.write_recipe(
+        root / f"{args.name}_train",
+        harvest_dirs=[str(d) for d in harvest_dirs],
+        max_samples=args.max_samples,
+        line_tokens_max=args.line_tokens_max,
+        mixed_share=args.mixed_share,
+        mixed_lines=sum(1 for line in samples if sampling.is_mixed_line(line)),
+        lines=len(samples),
+        upper=args.upper,
+        upper_share=args.upper_share,
+        index=args.index,
+        repeats=args.repeats,
+        seed=args.seed,
     )
     print(
         f"rendered {crops} crops into {root / f'{args.name}_train'} in {time.time() - started:.0f}s"

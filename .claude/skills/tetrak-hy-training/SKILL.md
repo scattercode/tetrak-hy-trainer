@@ -35,11 +35,16 @@ section once that model is released.
       2026: the twelve GHEA and Arnamu book faces draw the Russian alphabet,
       the three others do not and the per-line guard keeps them off Cyrillic
       lines. The lists are under step 4.
-- [ ] **Mixed-script tokens** (step 6, issue #43). A token mixing Cyrillic
-      with Armenian or Latin letters is dropped at crop harvest, not taught;
-      a token that is all Cyrillic is kept now, where v5/v6 dropped it.
+- [ ] **Mixed-script tokens** (step 6, issue #43). The synthetic sampler
+      drops a token mixing Cyrillic with Armenian or Latin letters since
+      9 November 2026 (`charset.mixes_cyrillic`); the crop harvester must do
+      the same at re-harvest. A token that is all Cyrillic is kept, where
+      v5/v6 dropped it.
 
-- [ ] **Refresh every harvest's transcripts first.** Harvest text is saved
+- [x] **Refresh every harvest's transcripts first.** Done 9 November 2026:
+      every page of the 58 harvests is at cleaning 3, except two blank
+      Tumanyan vol. 5 pages (5 and 836) whose refresh cleans to nothing and
+      so keeps the old entry; harmless. Harvest text is saved
       after cleaning, and cleaning 1 folded every printed `<` to `«` for good;
       a plain re-run resumes past it. Pages now record their `cleaning`, and
       `python -m tetrak_hy_trainer.harvest --index … --out … --refresh-stale`
@@ -210,6 +215,25 @@ hours in.
 - `--eval-dir` scores the packaged result against real pages before you wake
   up, so the honest number is in the log.
 - Interrupted? The checkpoint survives — re-package with `--package-only`.
+
+**Mixed-script lines (brief 014).** `--mixed-share 0.05` on either script
+lifts the lines that mix Armenian and Cyrillic tokens to that fraction of the
+sample; `0` (the default) keeps the natural rate and the draws of every
+earlier seeded set. The supply is thin: 5,747 such candidate lines of 2.1
+million over the encyclopedia and Tumanyan volumes (0.27%, measured
+9 November 2026), so a share above about 10% of a 60,000-line set repeats
+them. Tokens mixing Cyrillic with Armenian or Latin letters are dropped
+(`charset.mixes_cyrillic`); wholly Cyrillic tokens stay. Each rendered set
+writes `recipe.json` beside its labels with the share asked and the mixed
+lines it got: copy both into the `VERSIONS` entry.
+
+**The charset diff under v5 (9 November 2026).** Six of the 58 harvests are
+clean; the residual in the rest is wiki and maths markup (`_ \ { } ^ | ~`,
+mostly the v0 encyclopedia harvest), Greek, accented Latin (`é`), curly and
+low quotation marks, bullets and `#`, all already left out at Stage 0.2 and
+all dropped with their tokens. The only Cyrillic the corpus prints outside v5
+is fifteen scattered non-Russian letters in encyclopedia names (`ғ ҹ ә ћ і` and
+an accented `ѐ`), left out; no pre-1918 letter appears, as Stage 0.3 assumed.
 
 ## 6. Harvest real crops
 

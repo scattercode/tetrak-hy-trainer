@@ -47,6 +47,7 @@ from tetrak_hy_trainer import (  # noqa: E402
     charset,
     heldout,
     packaging,
+    sampling,
     synth,
     train_config,
     wikisource,  # noqa: E402
@@ -82,7 +83,14 @@ def clean_token_runs(harvest_dirs: list[Path]) -> list[list[str]]:
                 text_file.read_text(encoding="utf-8"), index_title
             )
             for token in page_text.split():
-                if 1 <= len(token) <= 24 and set(token) <= allowed:
+                # A token mixing Cyrillic with Armenian or Latin letters
+                # breaks the run like a stray: brief 014's Stage 0.3
+                # policy, see charset.mixes_cyrillic.
+                if (
+                    1 <= len(token) <= 24
+                    and set(token) <= allowed
+                    and not charset.mixes_cyrillic(token)
+                ):
                     current.append(token)
                 elif current:
                     runs.append(current)
@@ -98,12 +106,15 @@ def build_line_samples(
     rng: random.Random,
     tokens_max: int,
     chars_max: int = 30,
+    mixed_share: float = 0.0,
 ) -> list[str]:
     """Sample text lines: 1..tokens_max consecutive tokens, length-capped.
 
     One candidate per token position (with a random length draw), sampled
     down to *max_samples* — so common vocabulary appears at natural
-    frequency and every page contributes.
+    frequency and every page contributes. *mixed_share* lifts the lines
+    that mix Armenian and Cyrillic tokens to that fraction of the sample
+    (brief 014); zero keeps the natural rate and the draws unchanged.
     """
     candidates: list[str] = []
     for run in clean_token_runs(harvest_dirs):
@@ -114,8 +125,14 @@ def build_line_samples(
                 candidates.append(line)
     if len(candidates) < 1000:
         raise SystemExit(f"only {len(candidates)} line candidates -- harvest more text first")
-    rng.shuffle(candidates)
-    return candidates[:max_samples]
+    samples, mixed = sampling.with_mixed_share(candidates, max_samples, rng, mixed_share)
+    wanted = round(max_samples * mixed_share)
+    print(
+        f"mixed-script lines: {mixed} of {len(samples)}"
+        + (f" ({wanted} wanted)" if mixed < wanted else ""),
+        flush=True,
+    )
+    return samples
 
 
 def upper_case_line(line: str) -> str:
@@ -295,6 +312,12 @@ def main() -> int:
     parser.add_argument("--max-samples", type=int, default=60_000)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--line-tokens-max", type=int, default=4)
+    parser.add_argument(
+        "--mixed-share",
+        type=float,
+        default=0.0,
+        help="this fraction of lines mix Armenian and Cyrillic tokens (brief 014); 0 is the natural rate",
+    )
     parser.add_argument("--min-size", type=int, default=18)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--val-interval", type=int, default=2_000)
@@ -329,7 +352,9 @@ def main() -> int:
 
     started = time.time()
     rng = random.Random(0)
-    samples = build_line_samples(harvest_dirs, args.max_samples, rng, args.line_tokens_max)
+    samples = build_line_samples(
+        harvest_dirs, args.max_samples, rng, args.line_tokens_max, mixed_share=args.mixed_share
+    )
     print(f"line samples: {len(samples)}", flush=True)
 
     fonts = find_fonts()
@@ -337,6 +362,17 @@ def main() -> int:
     sizes = tuple(s for s in (18, 22, 28, 36, 48, 64) if s >= args.min_size)
     data_root, crops = render_corpus(run_dir, samples, fonts, sizes, args.repeats, args.augment)
     print(f"rendered {crops} training crops in {time.time() - started:.0f}s", flush=True)
+    sampling.write_recipe(
+        data_root / "syn_train",
+        harvest_dirs=[str(d) for d in harvest_dirs],
+        max_samples=args.max_samples,
+        line_tokens_max=args.line_tokens_max,
+        mixed_share=args.mixed_share,
+        mixed_lines=sum(1 for line in samples if sampling.is_mixed_line(line)),
+        lines=len(samples),
+        repeats=args.repeats,
+        seed=0,
+    )
 
     config = train_config.build_config(
         experiment_name=args.run_name,
