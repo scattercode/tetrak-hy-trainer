@@ -19,10 +19,12 @@ because it actively teaches the model the wrong shape.
 How it works
 ------------
 1. :func:`column_order` puts the boxes into transcript order. The ASE is
-   set in two columns, and grouping boxes by baseline alone — what
-   ``tetrak_ocr.layout`` does — reads straight across the gutter,
-   interleaving the columns and desynchronising everything downstream.
-   Boxes that *straddle* the gutter are dropped rather than placed:
+   set in two or three columns, and grouping boxes by baseline alone —
+   what ``tetrak_ocr.layout`` once did — reads straight across the
+   gutters, interleaving the columns and desynchronising everything
+   downstream. :func:`columns` finds the gutters on trimmed boxes and
+   splits recursively, so a three-column page splits twice.
+   Boxes that *straddle* a gutter are dropped rather than placed:
    they are running headers, page numbers and rules, which the
    transcripts (correctly) omit, so they have no truth token to pair
    with anyway.
@@ -46,13 +48,15 @@ lives in ``scripts/harvest_real_crops.py``.
 
 **The column logic here has a twin.** ``tetrak_ocr.layout`` (in the private
 Tetrak repository) solves the same problem for transcript output, with its own
-copy of the gutter detection, the baseline grouping and the three straddle
+copy of the gutter detection, the baseline grouping and the straddle
 constants. The repositories cannot share code — this one is public and that
 one is not — so the duplication is deliberate and the drift is not: a fix to
-either is worth porting to the other. They differ in one respect only, and on
-purpose: a box straddling the gutter is *dropped* here (the transcripts omit
-running heads, so it has no truth token to pair with) and *placed* there
-(dropping text is not an option when the output is the text).
+either is worth porting to the other. The trimmed-box gutter search here is
+that module's ``_vertical_cut`` (brief 013 Stage 4), ported for brief 014.
+They differ in one respect only, and on purpose: a box straddling the gutter
+is *dropped* here (the transcripts omit running heads, so it has no truth
+token to pair with) and *placed* there (dropping text is not an option when
+the output is the text).
 """
 
 from __future__ import annotations
@@ -75,6 +79,31 @@ DEFAULT_MAX_STRADDLE_SHARE = 0.05
 # sparse page is judged by a threshold of less than one box, and a single
 # header is enough to hide a perfectly good gutter.
 DEFAULT_STRADDLE_ALLOWANCE = 3
+
+# A box's horizontal extent is trimmed by this fraction of the region's
+# median box height at each end before the gutter is looked for. CRAFT pads
+# its boxes, and on the encyclopedia's three-column pages (set closer than
+# the padding) no x was free of boxes: neither gutter was found, every page
+# read straight across, and the alignment kept 40% of its boxes against
+# 80% on single-column books. Trimmed by a quarter of a line height the
+# same gutters are crossed by nothing (brief 013 Stage 4, measured in
+# Tetrak's layout module; ported here under brief 014, issue #43).
+DEFAULT_GUTTER_TRIM = 0.25
+
+# The narrower side of a split must span at least this share of the
+# region's width, or this ratio of the wider side's. A gutter between text
+# columns leaves comparable widths on both sides; the gap beside a column
+# of line numbers in a critical apparatus leaves a sliver beside a full
+# measure, and that page is a table whose transcript writes each row as
+# one line. Without this the trimming above would separate those label
+# columns and desynchronise every apparatus page.
+DEFAULT_MIN_COLUMN_WIDTH_SHARE = 0.2
+DEFAULT_MIN_COLUMN_WIDTH_RATIO = 0.5
+
+# How many times a region may be split into columns. Three columns is the
+# most this material sets (the encyclopedia); the cap exists so a strange
+# page cannot be peeled apart indefinitely.
+MAX_COLUMN_DEPTH = 3
 
 # A column has to hold at least this share of the page's boxes for a split
 # to be believed -- otherwise a page with one column and a stray marginal
@@ -210,21 +239,48 @@ def _in_reading_order(detections: Sequence[Detection]) -> list[Detection]:
     return [d for line in lines for d in sorted(line, key=lambda d: d.bbox[0])]
 
 
+def _trim_of(detections: Sequence[Detection], trim: float) -> float:
+    """*trim* as pixels: that fraction of the region's median box height."""
+    heights = [d.height for d in detections if d.height > 0]
+    return statistics.median(heights) * trim if heights else 0.0
+
+
+def _trimmed_extent(detection: Detection, trim: float) -> tuple[float, float]:
+    """*detection*'s horizontal extent less *trim* at each end, never inverted."""
+    left, right = detection.bbox[0] + trim, detection.bbox[2] - trim
+    if left >= right:
+        middle = (detection.bbox[0] + detection.bbox[2]) / 2
+        return middle, middle
+    return left, right
+
+
 def find_gutter(
     detections: Sequence[Detection],
     max_straddle_share: float = DEFAULT_MAX_STRADDLE_SHARE,
     min_column_share: float = DEFAULT_MIN_COLUMN_SHARE,
     straddle_allowance: int = DEFAULT_STRADDLE_ALLOWANCE,
+    trim: float = DEFAULT_GUTTER_TRIM,
+    min_column_width_share: float = DEFAULT_MIN_COLUMN_WIDTH_SHARE,
+    min_column_width_ratio: float = DEFAULT_MIN_COLUMN_WIDTH_RATIO,
 ) -> float | None:
-    """The x of the column gutter, or ``None`` if the page is one column.
+    """The x of a column gutter within *detections*, or ``None`` for one column.
 
-    Scans candidate positions across the middle of the page and counts
-    boxes crossing each one. A two-column page has a band almost nothing
-    crosses; a single-column page has no such band, because most lines
-    cross any x near the middle.
+    Boxes are trimmed first (see :data:`DEFAULT_GUTTER_TRIM`), then the
+    crossing count is swept over the trimmed edges rather than sampled: a
+    close-set gutter can be narrower than any sampling step, and the
+    detector's padding otherwise fills it. Every gap few enough boxes
+    cross is a candidate; candidates are tried fewest crossings first and
+    widest among equals, and the first that leaves real columns on both
+    sides -- by box count and by width -- wins. Taking only the emptiest
+    gap and giving up when it failed lost the second gutter of a
+    three-column page to a narrower, emptier gap inside a column.
+
+    The search covers the middle 70% of the region, not 40%: under
+    :func:`columns` the region is whatever the previous split left, and
+    its gutter can sit anywhere within it.
 
     Args:
-        detections: The page's boxes. Fewer than four and no split is
+        detections: The region's boxes. Fewer than four and no split is
             attempted -- there is nothing to be confident about.
         max_straddle_share: Largest share of boxes that may cross the
             gutter for it to count as one.
@@ -232,6 +288,11 @@ def find_gutter(
         straddle_allowance: Absolute floor under *max_straddle_share*, so
             a few spanning elements never hide a real gutter on a sparse
             page.
+        trim: Fraction of the median box height trimmed from each end of
+            every box before counting crossings.
+        min_column_width_share: The narrower side must span this share of
+            the region's width...
+        min_column_width_ratio: ...or this ratio of the wider side's.
 
     Returns:
         The gutter's x in pixels, or ``None``.
@@ -245,43 +306,70 @@ def find_gutter(
     if width <= 0:
         return None
 
-    best: tuple[int, float] | None = None
-    steps = 80
-    low, high = page_left + 0.3 * width, page_left + 0.7 * width
-    for step in range(steps + 1):
-        candidate = low + (high - low) * step / steps
-        straddling = sum(1 for d in detections if d.bbox[0] < candidate < d.bbox[2])
-        if best is None or straddling < best[0]:
-            best = (straddling, candidate)
+    pixels = _trim_of(detections, trim)
+    extents = [_trimmed_extent(d, pixels) for d in detections]
+    low, high = page_left + 0.15 * width, page_left + 0.85 * width
 
     allowed = max(straddle_allowance, max_straddle_share * len(detections))
-    if best is None or best[0] > allowed:
-        return None
+    edges = sorted({low, high, *(x for extent in extents for x in extent if low < x < high)})
+    candidates: list[tuple[int, float, float]] = []
+    for start, stop in zip(edges, edges[1:], strict=False):
+        middle = (start + stop) / 2
+        crossing = sum(1 for left, right in extents if left < middle < right)
+        if crossing <= allowed:
+            candidates.append((crossing, -(stop - start), middle))
 
-    gutter = best[1]
-    left = sum(1 for d in detections if d.bbox[2] <= gutter)
-    right = sum(1 for d in detections if d.bbox[0] >= gutter)
     minimum = min_column_share * len(detections)
-    if left < minimum or right < minimum:
-        return None
-    return gutter
+    for _, _, gutter in sorted(candidates):
+        left_side = [extent for extent in extents if extent[1] <= gutter]
+        right_side = [extent for extent in extents if extent[0] >= gutter]
+        if len(left_side) < minimum or len(right_side) < minimum:
+            continue
+        narrowest, widest = sorted(
+            max(right for _, right in side) - min(left for left, _ in side)
+            for side in (left_side, right_side)
+        )
+        if (
+            narrowest >= min_column_width_share * width
+            or narrowest >= min_column_width_ratio * widest
+        ):
+            return gutter
+    return None
+
+
+def columns(
+    detections: Sequence[Detection], depth: int = 0, trim: float = DEFAULT_GUTTER_TRIM
+) -> list[list[Detection]]:
+    """Split *detections* into columns, left to right, recursively.
+
+    Each region is split at :func:`find_gutter` until no gutter is found
+    or :data:`MAX_COLUMN_DEPTH` is reached, so a three-column page splits
+    twice. A box whose **trimmed** extent still crosses a gutter is
+    dropped, not placed: on these pages such boxes are running headers,
+    page numbers and rules, which the transcripts omit, so they have no
+    token to pair with and would only desynchronise the alignment. A box
+    that merely overhangs the gutter by its padding belongs to the column
+    holding the rest of it.
+    """
+    region = list(detections)
+    if depth >= MAX_COLUMN_DEPTH:
+        return [region]
+    gutter = find_gutter(region, trim=trim)
+    if gutter is None:
+        return [region]
+    pixels = _trim_of(region, trim)
+    left = [d for d in region if _trimmed_extent(d, pixels)[1] <= gutter]
+    right = [d for d in region if _trimmed_extent(d, pixels)[0] >= gutter]
+    return columns(left, depth + 1, trim) + columns(right, depth + 1, trim)
 
 
 def column_order(detections: Sequence[Detection]) -> list[Detection]:
     """Order boxes as a reader would take them, column by column.
 
-    Boxes straddling the gutter are **dropped**, not placed. On these
-    pages they are running headers, page numbers and rules, which the
-    transcripts omit -- so they have no token to pair with, and leaving
-    them in only desynchronises the alignment.
+    See :func:`columns` for how the columns are found and why boxes
+    straddling a gutter are dropped rather than placed.
     """
-    gutter = find_gutter(detections)
-    if gutter is None:
-        return _in_reading_order(detections)
-
-    left = [d for d in detections if d.bbox[2] <= gutter]
-    right = [d for d in detections if d.bbox[0] >= gutter]
-    return _in_reading_order(left) + _in_reading_order(right)
+    return [d for column in columns(detections) for d in _in_reading_order(column)]
 
 
 def pair_tokens(
