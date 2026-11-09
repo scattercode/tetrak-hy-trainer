@@ -50,6 +50,22 @@ class TestCleanWikitext:
     def test_removes_templates_including_nested(self) -> None:
         assert clean_wikitext("ա {{կաղապար|{{ներդիր}}}} բ") == "ա բ"
 
+    def test_keeps_verse_wrapped_in_a_poem_template(self) -> None:
+        # hy.wikisource's verse pages wrap the whole page in {{Poemx}}, with
+        # {{Տող|n}} line numbers inside; the wrapper went, and took the poem.
+        page = (
+            '<noinclude><pagequality level="3" user="x" /></noinclude>'
+            "{{Poemx||<poem>{{Տող|224}}Հողը կըրծող ժողովուրդն է, ցեխին մեջ\n"
+            "{{Տող|226—227}}Ուրիշներուն դըղյակ շինող խուժա՜նն է՝\n"
+            "Որ ոտքի միակ ոստումով</poem>}}"
+        )
+        cleaned = clean_wikitext(page)
+        assert cleaned.splitlines() == [
+            "Հողը կըրծող ժողովուրդն է, ցեխին մեջ",
+            "Ուրիշներուն դըղյակ շինող խուժա՜նն է՝",
+            "Որ ոտքի միակ ոստումով",
+        ]
+
     def test_keeps_wikilink_display_text(self) -> None:
         assert clean_wikitext("[[Թիրախ|ցուցադրվող]] տեքստ") == "ցուցադրվող տեքստ"
         assert clean_wikitext("[[Պարզ հղում]]") == "Պարզ հղում"
@@ -363,6 +379,25 @@ class TestNormaliseTranscript:
     def test_a_quoted_word_against_a_word_is_still_a_quotation(self) -> None:
         """What tells a sound change from a quotation is the closing '>'."""
         assert wikisource.normalise_transcript("ասաց<Ազգ> և") == "ասաց«Ազգ» և"
+
+    def test_classical_transcriber_marks_become_armenian_punctuation(self) -> None:
+        # Brief 014: the apostrophe of elision, the comma and the emphasis
+        # mark as the classical harvests' transcribers type them.
+        assert wikisource.normalise_transcript("կ’ուզէր կˈիմանանք") == "կ՚ուզէր կ՚իմանանք"
+        assert wikisource.normalise_transcript("նախ` արանց`") == "նախ՝ արանց՝"
+        assert wikisource.normalise_transcript("ո′չ Գագի´կ") == "ո՛չ Գագի՛կ"
+
+    def test_the_same_marks_are_left_alone_outside_armenian_words(self) -> None:
+        assert wikisource.normalise_transcript("l’étude 5′ ``") == "l’étude 5′ ``"
+
+    def test_soft_hyphen_not_sign_and_ligature(self) -> None:
+        assert wikisource.normalise_transcript("մշա\u00adկոյթին") == "մշակոյթին"
+        assert wikisource.normalise_transcript("փոք¬") == "փոք-"
+        assert wikisource.normalise_transcript("երբեﬓ") == "երբեմն"
+
+    def test_wikitable_markup_is_stripped(self) -> None:
+        page = "{| class=x\n|-\n| առաջին || երկրորդ\n! գլուխ\n|}\nվերջ"
+        assert wikisource.normalise_transcript(page) == "\n\nառաջին երկրորդ\nգլուխ\n\nվերջ"
 
     def test_minus_sign_becomes_an_en_dash(self) -> None:
         """U+2212 is a near-perfect homoglyph of the en dash, so it is

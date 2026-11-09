@@ -41,6 +41,14 @@ import re
 # Armenian punctuation -> the ASCII character it is visually identical to.
 _PUNCTUATION_HOMOGLYPHS = str.maketrans({"։": ":", "․": "."})
 
+# The two-letter եւ and the ligature և are one thing for scoring (brief 014,
+# decided 2026-10-08). Classical-orthography presses split 21 to 16 on which
+# they set, reformed presses set the ligature, and transcribers follow the
+# page or do not; ground truth stays as printed so the model learns to read
+# both, and the metric refuses to rank an engine on which form it emitted.
+# Applied after lowercasing, so Եւ and ԵՒ fold too.
+_EW_LIGATURE = ("եւ", "և")
+
 
 def _is_word(token: str) -> bool:
     """A token with at least one letter or digit; ``-`` or ``…`` alone is not."""
@@ -57,9 +65,11 @@ def normalise(text: str) -> str:
     throughout; every register uses ``.`` for ``․``) that holding an engine
     to either form would rank engines on which habit their output happens
     to share with the transcript, not on what they read. Mapped towards
-    ASCII so that text with no Armenian in it is unaffected.
+    ASCII so that text with no Armenian in it is unaffected. The two-letter
+    ``եւ`` is scored as the ligature ``և`` for the same reason (brief 014).
     """
-    return re.sub(r"\s+", " ", text.lower().translate(_PUNCTUATION_HOMOGLYPHS)).strip()
+    lowered = text.lower().translate(_PUNCTUATION_HOMOGLYPHS).replace(*_EW_LIGATURE)
+    return re.sub(r"\s+", " ", lowered).strip()
 
 
 def character_similarity(actual: str, expected: str) -> float:

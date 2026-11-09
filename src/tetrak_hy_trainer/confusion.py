@@ -1,7 +1,6 @@
 """Which characters the recogniser confuses, counted from paired words.
 
-v1's error analysis (tetrak, ``product/research/
-armenian-v1-error-analysis.md``) reduced the model's remaining gap to a
+v1's error analysis (design research 010) reduced the model's remaining gap to a
 table of character confusions, and split it in two:
 
 - **Homoglyphs** — ``հ``→``h``, ``։``→``:`` — the charset permitting

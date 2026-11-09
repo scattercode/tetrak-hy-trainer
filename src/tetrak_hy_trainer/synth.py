@@ -42,8 +42,8 @@ def _cmap(font_path: str) -> frozenset[int]:
     trainer renders one third of its synthetic crops with, has no glyph
     for Latin ``A``/``x`` or for either of the charset's v2 additions
     (U+2024, ``°``) -- found by exactly this comparison while verifying
-    those additions actually render (product/research/
-    armenian-v1-error-analysis.md's charset fix). A corpus built without
+    those additions actually render (the charset fix from design
+    research 010, the v1 error analysis). A corpus built without
     this check silently teaches the model the wrong shape for whatever a
     face is missing, for however many crops chose that face.
     """
