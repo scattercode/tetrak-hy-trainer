@@ -242,7 +242,7 @@ def find_fonts(font_dir: Path | None = None) -> list[Path]:
     for font in fonts:
         gaps = synth.missing_glyphs(str(font), charset.character_list())
         if gaps:
-            print(f"  {font.name} has no glyph for: {sorted(gaps)!r}", flush=True)
+            print(f"  {font.name} has no glyph for: {synth.describe_gaps(gaps)}", flush=True)
     return fonts
 
 
