@@ -121,6 +121,9 @@ OVERLAPPING_PAGES: dict[str, frozenset[int]] = {
     "(Soviet Armenian Encyclopedia) 9.djvu": frozenset({197}),
     # Brief 014: the scan carries p. 98 twice; p. 97 shares 303 runs with it.
     "Գրական քննադատական երկեր, Նիկոլ Աղբալյան": frozenset({97}),
+    # Brief 014, found when Stage 0 merged (2026-11-09): p. 69 shares eight
+    # runs with evaluation page 351 of the same volume.
+    "Խաչատուր Աբովյան, Երկերի լիակատար ժողովածու, հատոր 1": frozenset({69}),
 }
 
 # The Wikisource index titles carry the volume as a trailing "<n>.djvu", as in
