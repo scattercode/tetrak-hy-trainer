@@ -21,14 +21,19 @@ Composition
   Classical-orthography presses split 21 to 16 on the habit; reformed
   presses set the ligature almost without exception. Nothing is folded on
   the ground-truth side.
-- Pending for charset v5 (brief 014, not yet appended): the Armenian
+- v5 additions (:data:`V5_ADDITIONS`, brief 014 Stage 1): the Armenian
   apostrophe ՚ (U+055A), printed in classical orthography for elision
-  (``կ՚ուզէ``) and absent from every reformed source; and the Russian
-  alphabet in both cases including ё/Ё (66 classes), with the pre-1918
-  letters left out because no source supplies them. Ground truth for a
-  Cyrillic word is decided per token by its letters; tokens mixing Cyrillic
-  with Armenian or Latin letters (formulae, transcriber slips) are dropped
-  from training rather than taught.
+  (``կ՚ուզէ``) and absent from every reformed source -- the one printed
+  addition the Stage 0 charset diff found across 33 classical harvests;
+  and the Russian alphabet in both cases including ё/Ё (66 classes),
+  generated from the Unicode ranges like the Armenian letters, with the
+  pre-1918 letters (ѣ і ѳ ѵ) left out because no source supplies them.
+  Ground truth for a Cyrillic word is decided per token by its letters;
+  tokens mixing Cyrillic with Armenian or Latin letters (formulae,
+  transcriber slips) are dropped from training rather than taught. The
+  Latin/Cyrillic lookalikes (``а/a``, ``о/o``, ``с/c``, ``р/p``, ``е/e``,
+  ``х/x``) and the Armenian ones (``Օ/О``, ``Ո/П``) are therefore distinct
+  classes on purpose: the token's script, not the glyph, decides the label.
 - Armenian punctuation and typography: ՝ ՛ ՞ ՜ ։ ֊ « ».
 - Western digits and basic Latin, because 19th–20th century Armenian print
   mixes in Latin names, numerals and abbreviations.
@@ -121,6 +126,26 @@ V3_ADDITIONS = "…[]№²"
 # face from any line it cannot draw.
 V4_ADDITIONS = "<>³±"
 
+# v5 additions (brief 014 Stage 1, decided at Stage 0.3 on 2026-10-08):
+#   ՚      2,213  the Armenian apostrophe of elision ("կ՚ուզէ", "չ՚ուզեր"),
+#                 printed in 25 of the 33 classical-orthography harvests and
+#                 in no reformed source -- the only printed addition the
+#                 Stage 0 charset diff found; the transcribers' ’ and ˈ for
+#                 it are folded to it in wikisource.normalise_transcript
+#   А–Я а–я     the Russian alphabet in both cases, 64 letters, generated
+#                 from U+0410–U+042F and U+0430–U+044F so a typo cannot drop
+#                 one; plus Ё (U+0401) and ё (U+0451), which the ranges skip
+#   (not ѣ і ѳ ѵ) the pre-1918 letters are left out: the supply (the Soviet
+#                 encyclopedias and Tumanyan's apparatus) never prints them
+# Cyrillic is in because the Soviet-era harvests carry Russian words and
+# short runs mid-line -- 72 tokens on the Tumanyan evaluation set alone --
+# and v5/v6 could only drop every crop that held one. Appended, like
+# V4_ADDITIONS, so every earlier charset stays a prefix of this one.
+ARMENIAN_APOSTROPHE = "՚"  # U+055A
+CYRILLIC_UPPER = "".join(chr(code) for code in range(0x0410, 0x042F + 1)) + "Ё"  # А–Я, Ё
+CYRILLIC_LOWER = "".join(chr(code) for code in range(0x0430, 0x044F + 1)) + "ё"  # а–я, ё
+V5_ADDITIONS = ARMENIAN_APOSTROPHE + CYRILLIC_UPPER + CYRILLIC_LOWER
+
 # Settled at spike time against what the EasyOCR trainer actually expects,
 # and baked into every released model since v0. Not a switch to flip: see
 # the module docstring.
@@ -151,6 +176,7 @@ def character_list(include_space: bool | None = None) -> str:
         + V2_ADDITIONS
         + V3_ADDITIONS
         + V4_ADDITIONS
+        + V5_ADDITIONS
     )
     if include_space:
         characters += " "

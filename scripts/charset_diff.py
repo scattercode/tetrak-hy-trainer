@@ -6,8 +6,9 @@ on it. A character the charset lacks is a character the training
 pipeline silently filters and the model can never emit -- U+2024 cost
 brief 011 a full training run this way. The output is a table of stray
 characters with counts and codepoints; deciding which strays become
-charset additions (a new model version) and which stay out of scope
-(Cyrillic) is a recorded decision, not this script's.
+charset additions (a new model version, as Cyrillic became in v5) and
+which stay out of scope (Arabic, Greek) is a recorded decision, not this
+script's.
 
 Run from the repo root:
 

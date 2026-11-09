@@ -22,12 +22,22 @@ from the synthetic sampler and from the word list. `harvest_real_crops.py`
 checks the harvest manifest before reading anything. If a guard fires, do not
 work around it.
 
-## Pending for the next run: charset v4
+## Pending for the next run: charsets v4 and v5
 
-Charset v4 (`<`, `>`, `³`, `±`; `num_class` 175 → 179) and the per-source
-angle-bracket fold landed on 2026-10-04 and have not been trained or
-published yet. They ship with whatever the next run is for. Delete this
+Two charset versions are in the code and neither has trained: v4 (`<`, `>`,
+`³`, `±`; `num_class` 175 → 179, with the per-source angle-bracket fold,
+2026-10-04) and v5 (the Armenian apostrophe `՚` and the Russian alphabet
+in both cases including `ё`/`Ё`, 67 classes; `num_class` 179 → 246, brief
+014 Stage 1, 2026-11-09). They ship together with the v7 run. Delete this
 section once that model is released.
+
+- [ ] **Cyrillic faces** (step 4, brief 014 issue #40). Run the glyph guard
+      for the v5 letters on every render face before any synthetic set:
+      Mshtakan has no Cyrillic and the GHEA faces are unchecked. Record the
+      faces excluded from mixed-script lines.
+- [ ] **Mixed-script tokens** (step 6, issue #43). A token mixing Cyrillic
+      with Armenian or Latin letters is dropped at crop harvest, not taught;
+      a token that is all Cyrillic is kept now, where v5/v6 dropped it.
 
 - [ ] **Refresh every harvest's transcripts first.** Harvest text is saved
       after cleaning, and cleaning 1 folded every printed `<` to `«` for good;
@@ -38,16 +48,18 @@ section once that model is released.
       stale pages, and the synthetic sampler and word list, which do not,
       would otherwise never see a printed `<`.
 - [ ] **Fresh synthetic pre-train** (step 5). v6 and every earlier checkpoint
-      has a 175-class head; `finetune_real.py` refuses them.
+      has a 175-class head; `finetune_real.py` refuses anything but 246.
 - [ ] **Re-harvest every real-crop set** (step 6). Crops harvested under v3
       carry `«` where the page prints `<`, and relabelling cannot restore it;
       `finetune_real.py` refuses an unstamped `real_*` folder.
 - [ ] **Rebuild the word list** (step 9). It picks the change up on its own,
       but only if it is rebuilt rather than reused from v6.
-- [ ] **Check the confusion table** (step 8) for `<` against `«`, and `³`
-      against `²` and `3`.
-- [ ] **`VERSIONS` entry** (step 10): record charset v4, the four additions,
-      and that the `<` fold changed (see `charset.py` and
+- [ ] **Check the confusion table** (step 8) for `<` against `«`, `³`
+      against `²` and `3`, and the Latin/Cyrillic lookalikes (`а/a`, `о/o`,
+      `с/c`, `р/p`, `е/e`, `х/x`) and `Օ/О`, `Ո/П`: a confusion there is a
+      token-script error, not a shape error.
+- [ ] **`VERSIONS` entry** (step 10): record charsets v4 and v5, their
+      additions, and that the `<` fold changed (see `charset.py` and
       `wikisource.PRINTED_ANGLE_BRACKETS`).
 - [ ] **Library release** (`tetrak-hy-weights-release` in
       `tetrak-easyocr-armenian`): a new `num_class` is a new yaml, so the

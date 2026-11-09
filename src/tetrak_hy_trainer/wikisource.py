@@ -259,7 +259,8 @@ def clean_wikitext(text: str, index_title: str = "") -> str:
 # Left out deliberately: '|', '{', '}', '\\', '^', '`', '~' are garbled
 # Greek and Latin transliteration and unrendered maths markup ("x_1",
 # "a{3piy£}"), not print, so the charset filter should keep dropping
-# those tokens. Cyrillic and Arabic stay out of scope.
+# those tokens. Arabic stays out of scope; Cyrillic joined the charset in
+# v5 (brief 014) and is handled per token, not here.
 _TRANSCRIPT_SUBSTITUTIONS = {
     # Minus sign and horizontal bar for dashes, in dialogue and glosses:
     # "− Էֆենտի", "acceleratio − արագացում". 10,770 occurrences, most of

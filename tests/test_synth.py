@@ -22,7 +22,7 @@ needs_font = pytest.mark.skipif(
 def test_stray_characters_are_rejected_not_filtered(tmp_path: Path) -> None:
     """A silent filter is how a training set quietly shrinks; strays raise."""
     with pytest.raises(ValueError, match="outside the charset"):
-        synth.write_dataset(tmp_path, "x", ["ok", "п-cyrillic"], font_path=FONT)
+        synth.write_dataset(tmp_path, "x", ["ok", "π-greek"], font_path=FONT)
 
 
 class TestWriteLabels:

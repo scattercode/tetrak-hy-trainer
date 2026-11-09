@@ -65,7 +65,9 @@ def test_additions_are_appended_in_version_order() -> None:
     is a prefix of every later one and the ``ա`` index test_order_is_stable
     pins is never disturbed by an append."""
     characters = charset.character_list(include_space=False)
-    assert characters.endswith(charset.V2_ADDITIONS + charset.V3_ADDITIONS + charset.V4_ADDITIONS)
+    assert characters.endswith(
+        charset.V2_ADDITIONS + charset.V3_ADDITIONS + charset.V4_ADDITIONS + charset.V5_ADDITIONS
+    )
 
 
 def test_v4_additions_are_present() -> None:
@@ -76,11 +78,42 @@ def test_v4_additions_are_present() -> None:
         assert character in characters
 
 
+def test_v5_additions_are_present() -> None:
+    """Brief 014 Stage 1: the apostrophe of elision the classical presses
+    print, and the Russian alphabet in both cases including ё/Ё."""
+    characters = charset.character_list()
+    assert "՚" in characters
+    for character in "АБВЯЁабвяё":
+        assert character in characters
+
+
+def test_v5_is_the_apostrophe_and_sixty_six_cyrillic_classes() -> None:
+    """Pins the v5 suffix: 1 + 33 + 33 characters, num_class 179 -> 246.
+    The pre-1918 letters stay out (Stage 0.3: no source prints them)."""
+    assert len(charset.CYRILLIC_UPPER) == 33
+    assert len(charset.CYRILLIC_LOWER) == 33
+    assert charset.V5_ADDITIONS.startswith("՚")
+    assert len(charset.V5_ADDITIONS) == 67
+    assert charset.num_class() == 246
+    for pre_reform in "ѣіѳѵѢІѲѴ":
+        assert pre_reform not in charset.character_list()
+
+
+def test_cyrillic_lookalikes_are_their_own_classes() -> None:
+    """A Cyrillic а is not a Latin a: the token's script decides the label
+    (Stage 0.3), so both glyphs need a class and must not collapse."""
+    characters = charset.character_list()
+    for latin, cyrillic in (("a", "а"), ("o", "о"), ("c", "с"), ("p", "р"), ("e", "е"), ("x", "х")):
+        assert latin != cyrillic
+        assert characters.index(latin) != characters.index(cyrillic)
+
+
 def test_strays_counts_out_of_charset_characters() -> None:
     """The check that would have caught U+2024 before it cost a training
     run: count what the corpus contains that the charset cannot emit."""
-    found = charset.strays("հայ п. § 5 «ok»")
-    assert found["п"] == 1
+    # Greek, not Cyrillic: Cyrillic joined the charset in v5.
+    found = charset.strays("հայ π. § 5 «ok»")
+    assert found["π"] == 1
     assert found["§"] == 1
     assert "հ" not in found
 
@@ -121,7 +154,7 @@ def test_an_unstamped_or_older_folder_does_not_match(tmp_path) -> None:
     older charset carries a different list. Both must be refused."""
     assert not charset.stamp_matches(tmp_path)
     (tmp_path / charset.STAMP_FILE).write_text(
-        charset.character_list().removesuffix(charset.V4_ADDITIONS + " ") + " ",
+        charset.character_list().removesuffix(charset.V5_ADDITIONS + " ") + " ",
         encoding="utf-8",
     )
     assert not charset.stamp_matches(tmp_path)
