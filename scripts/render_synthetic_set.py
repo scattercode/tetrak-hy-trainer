@@ -125,6 +125,14 @@ def main() -> int:
         default=0.0,
         help="this fraction of lines mix Armenian and Cyrillic tokens (brief 014); 0 is the natural rate",
     )
+    parser.add_argument(
+        "--classical-share",
+        type=float,
+        default=0.0,
+        help="this fraction of lines from classical-orthography harvests (brief 014); "
+        "0 is the natural rate, and keeps brief 019's seeded sets reproducible; "
+        "the pre-train defaults to 0.25",
+    )
     parser.add_argument("--seed", type=int, default=13)
     args = parser.parse_args()
 
@@ -134,8 +142,15 @@ def main() -> int:
 
     started = time.time()
     rng = random.Random(args.seed)
+    report: dict = {}
     samples = build_line_samples(
-        harvest_dirs, args.max_samples, rng, args.line_tokens_max, mixed_share=args.mixed_share
+        harvest_dirs,
+        args.max_samples,
+        rng,
+        args.line_tokens_max,
+        mixed_share=args.mixed_share,
+        classical_share=args.classical_share,
+        report=report,
     )
     if args.index:
         # Single words from the same text are the entries; the shapes around
@@ -185,13 +200,14 @@ def main() -> int:
         max_samples=args.max_samples,
         line_tokens_max=args.line_tokens_max,
         mixed_share=args.mixed_share,
-        mixed_lines=sum(1 for line in samples if sampling.is_mixed_line(line)),
+        classical_share=args.classical_share,
         lines=len(samples),
         upper=args.upper,
         upper_share=args.upper_share,
         index=args.index,
         repeats=args.repeats,
         seed=args.seed,
+        **report,
     )
     print(
         f"rendered {crops} crops into {root / f'{args.name}_train'} in {time.time() - started:.0f}s"
