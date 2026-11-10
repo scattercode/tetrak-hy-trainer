@@ -56,12 +56,14 @@ section once that model is released.
       the `--classical-share` and `--mixed-share` recorded. v6 and every
       earlier checkpoint has a 175-class head; `finetune_real.py` refuses
       anything but 246.
-- [ ] **Re-harvest every real-crop set** (step 6). Crops harvested under v3
+- [x] **Re-harvest every real-crop set** (step 6). Crops harvested under v3
       carry `«` where the page prints `<`, and relabelling cannot restore it;
-      `finetune_real.py` refuses an unstamped `real_*` folder. Started the
-      night of 9 November 2026 into `runs/v7-b014/all_data` from the sixteen
-      v6-b013 sources plus the classical sources at 1280 px and above
-      (issue #43); the per-source yields are in its `summary.json`.
+      `finetune_real.py` refuses an unstamped `real_*` folder. Done the
+      night of 9 November 2026 into `runs/v7-b014/all_data`: 217,362 crops
+      from 2,136 pages of 42 sources, the sixteen v6-b013 sources plus 26
+      classical ones (issue #43; the results paragraph in step 6). The
+      Cyrillic crops are still to come: they need a second pass with the v7
+      weights, once v7 can read them.
 - [ ] **Rebuild the word list** (step 9). It picks the change up on its own,
       but only if it is rebuilt rather than reused from v6.
 - [ ] **Check the confusion table** (step 8) for `<` against `«`, `³`
@@ -293,11 +295,14 @@ taken text-only; `--images --image-width 3840 --limit 50` on each existing
 harvest tops up fifty scans at the native width (the server clamps 3840 to
 it) without refetching wikitext. `--limit` takes pages in the API's title
 order (p1, p10, p100, …), which scatters them through the book rather than
-taking the front matter. Sources whose scans come back under 1280 px (Gorts
-and the Bhagavad Gita at 960 px; the census lists four more at 500 px) stay
-text supply for the sampler and contribute no crops; `runs/v7-b014/
-harvest-crops.sh` checks the width of each directory's scans before
-passing it. *Հայկական տպագրութիւն* is a history of printing whose specimen
+taking the front matter. Sources under 1280 px stay text supply for the
+sampler and contribute no crops: Gorts and the Bhagavad Gita (960 px by the
+census) were not fetched, and of the thirty that were, three came back at
+500 px (*Աղջկան մը յիշատակարանը*, Andersen's tales, Darwin) and *Zradasht*
+at 960; `runs/v7-b014/harvest-crops.sh` checks the width of each
+directory's first scan before passing it and lists the refusals in
+`skipped-dirs.txt`. *Հայկական տպագրութիւն* came back at 1920 px, the
+others at 1280. *Հայկական տպագրութիւն* is a history of printing whose specimen
 pages vary more than a fine-tune wants: fifty pages of it is the sample the
 brief asks for, not the whole.
 
@@ -316,6 +321,32 @@ seventeen encyclopedia pages went from 2,796 to 5,204 crops of 9,337 boxes
 (0.30 → 0.56); the nine single- and two-column book and dictionary pages
 kept exactly the same crops. This is Tetrak's `layout._vertical_cut`
 ported; the two modules are twins and a fix to either belongs in both.
+
+**What the re-harvest produced (brief 014, issue #43, 9–10 November 2026).**
+2,136 pages from 42 sources in 2 h 22 min on MPS with the v6 bundle:
+337,957 boxes, 217,362 crops (195,788 train, 21,574 val; 191,631 exact,
+25,731 near), a yield of 0.64 against v6-b013's 110,118 crops from 862
+pages. The encyclopedia volumes went from 0.39 and 0.40 to 0.61 and 0.58,
+the medical encyclopedia to 0.48; the classical books sit between 0.50 and
+0.90, where the Soviet books were. Three kinds of page yielded little, all
+for the same reason — the v6 reader cannot read them, so the alignment
+fails closed, and a second harvest with the v7 weights is how to recover
+them, not a change to the harvester:
+
+- *The First Love* (0.06) is set in an italic face from cover to cover.
+  The transcript matches the scan.
+- Russian-language pages in the two document collections (0.25 and 0.35)
+  and the Cyrillic words everywhere else: 8 Cyrillic crops kept, 8 dropped
+  as mixed, out of 217,362. v6 has no Cyrillic class.
+- Khatisian's memoirs (0.29): small, worn Western Armenian type.
+
+Columns: 1,891 pages read as one column, 25 as two, 207 as three. Thirteen
+sparse pages (title and contents pages, 330 boxes between them) split into
+four to seven columns and kept 84 crops; a minimum box count per column
+would stop it, and is not worth doing for thirteen pages. No crop came from
+a held-out page (`heldout.WORK_PAGES` and `OVERLAPPING_PAGES` checked
+against `summary.json`'s page list). The per-source counts are in
+`summary.json` under `per_source` and on issue #43.
 
 ## 7. Fine-tune on real crops
 
