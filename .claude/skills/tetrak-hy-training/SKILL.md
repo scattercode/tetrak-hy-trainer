@@ -52,10 +52,12 @@ section once that model is released.
       `runs/v0/harvest` and `runs/v1/harvest-*`: the crop harvester refuses
       stale pages, and the synthetic sampler and word list, which do not,
       would otherwise never see a printed `<`.
-- [ ] **Fresh synthetic pre-train** (step 5), with every harvest passed and
-      the `--classical-share` and `--mixed-share` recorded. v6 and every
-      earlier checkpoint has a 175-class head; `finetune_real.py` refuses
-      anything but 246.
+- [x] **Fresh synthetic pre-train** (step 5), with every harvest passed and
+      the `--classical-share` and `--mixed-share` recorded. Done 13–14
+      November 2026 as `runs/v7-b014` (issue #44; the results paragraph in
+      step 5), then fine-tuned the same day (issue #45; step 7). v6 and
+      every earlier checkpoint has a 175-class head; `finetune_real.py`
+      refuses anything but 246.
 - [x] **Re-harvest every real-crop set** (step 6). Crops harvested under v3
       carry `«` where the page prints `<`, and relabelling cannot restore it;
       `finetune_real.py` refuses an unstamped `real_*` folder. Done the
@@ -222,6 +224,24 @@ hours in.
 - `--eval-dir` scores the packaged result against real pages before you wake
   up, so the honest number is in the log.
 - Interrupted? The checkpoint survives — re-package with `--package-only`.
+- **`--eval-dir` needs easyocr, which this venv does not have.** The v7
+  pre-train ran its eleven hours, packaged, then crashed in the evaluation
+  with `ModuleNotFoundError: easyocr` (14 November 2026). Until the script
+  checks at start-up, leave `--eval-dir` off and score the bundle with
+  `evaluate_registers.py` from the sibling venv (step 8).
+
+**What v7's pre-train produced (brief 014, issue #44, 13–14 November 2026).**
+60,000 lines from all 58 harvests (33 classical by their own text),
+`--classical-share 0.25` (15,220 lines) and `--mixed-share 0.05` (3,000),
+175,500 crops rendered in 195 s, 150,000 iterations in 11.2 h. Best
+synthetic validation 95.13% at iteration 132,000; validation loss bottoms
+near 70,000 and drifts up while accuracy still creeps, the usual CTC shape.
+On the eight original registers the pre-train reads as v4 did (mean word
+recall 0.621 against 0.619), the synthetic-only pre-train v6 was fine-tuned
+from, so a wider head and a quarter classical lines cost nothing on reformed
+text. The artefacts sit in `saved_models/v7-b014-pretrain/` and
+`bundle-pretrain/` so the fine-tune could write `saved_models/v7-b014/` and
+`bundle/` under the same run.
 
 **Mixed-script lines (brief 014).** `--mixed-share 0.05` on either script
 lifts the lines that mix Armenian and Cyrillic tokens to that fraction of the
@@ -386,6 +406,31 @@ The 3,000-iteration re-run scored **0.7356 raw against the long run's
 the time, at the same 95% crop accuracy. A few thousand iterations is the
 right order of magnitude for a fine-tune; the crop number will not tell you
 that, and the page evaluation will.
+
+**What v7's fine-tune produced (brief 014, issue #45, 14 November 2026).**
+Brief 013's recipe on the re-harvested crops: 6,000 iterations,
+`real_train-syn_train-syn_caps_train` at `0.5-0.4-0.1`, 4.3 h. Held-out
+real-crop accuracy 82.0% at 500 → 90.2% at 6,000 with validation loss
+still falling, so the fixed count did not overfit; the 21,574-crop
+validation set (twice v6's, with classical pages) is why it took four hours
+rather than two — validation every 500 iterations is most of the time —
+and why its 90% is not comparable with v6's 95%. Against v6 on all
+eighteen registers (`runs/eval/registers/b014-v7-vs-v6.log`): seven of the
+eight original registers within ±0.02, Tumanyan +0.018; all ten classical
+and off-Wikisource registers up 0.05–0.19; mean over eighteen 0.801 →
+0.847. The Russian in the Tumanyan notes is read: 63 of 81 Cyrillic tokens
+on the five pages that have them, against none from v6.
+
+**The dictionary finding.** `dictionary-hy-en` lost 0.034 — not shapes:
+v7 reads more of its Armenian than v6 (120 of 365 tokens against 82) and
+less of its English (711 of 982 against 798), and emits 59 Cyrillic tokens
+on pages with none in the truth (`роог` for *poor*, `еаг` for *ear*). With
+Cyrillic in the charset the recogniser can spell an English word in
+lookalikes, and the dictionary is the register with pages of English. This
+is the token-script error the pending list's confusion check predicts; it
+is a per-token script policy at fold or decode time (brief 014 Stage 3),
+not another fine-tune. When the confusion table (step 8) shows `а/a`,
+`о/o`, `с/c`, `р/p`, `е/e`, `х/x`, read it as this.
 
 ## 8. Measure what actually moved
 
