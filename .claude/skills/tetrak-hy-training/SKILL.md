@@ -66,8 +66,8 @@ section once that model is released.
       classical ones (issue #43; the results paragraph in step 6). The
       Cyrillic crops are still to come: they need a second pass with the v7
       weights, once v7 can read them.
-- [ ] **Rebuild the word list** (step 9). It picks the change up on its own,
-      but only if it is rebuilt rather than reused from v6.
+- [x] **Rebuild the word list** (step 9). Done 15 November 2026 as two
+      lists under `runs/v7-b014/` (issue #46; the paragraph in step 9).
 - [ ] **Check the confusion table** (step 8) for `<` against `«`, `³`
       against `²` and `3`, and the Latin/Cyrillic lookalikes (`а/a`, `о/o`,
       `с/c`, `р/p`, `е/e`, `х/x`) and `Օ/О`, `Ո/П`: a confusion there is a
@@ -488,6 +488,23 @@ require; the upload publishes that, so keep the two together. To choose the
 decoder's threshold on validation crops, build a separate list with
 `--exclude-crops runs/<run>/all_data/real_val` so those pages' words are not in
 it.
+
+**Two lists since v7 (brief 014, issue #46).** `--orthography reformed`
+builds the modern list and `--orthography classical --nayiri …` the
+classical one; the default `all` is the v6 recipe. The filter judges each
+harvest whole, from its non-held-out pages, with `orthography.classify` as
+the synthetic sampler does, and a harvest in the mixed band or too short
+to say is in neither list. The Nayiri lexicon is Western Armenian in
+traditional orthography, so it belongs with the classical list, where v6
+had it in its only list. Built 15 November 2026: modern 130,762 words from
+22 reformed harvests (9,138 pages); classical 1,055,306 from 33 classical
+harvests (6,343 pages) plus 988,396 Nayiri forms. Free-standing `ւ` is in
+11.8% of the classical list's words and 0.3% of the modern's, which is the
+spot check that the filter took. The classical harvests carry a little
+reformed apparatus (Soviet editions of classical authors), so a few
+reformed forms sit in the classical list at low counts: fine for a decoder
+that accepts a token in either list and never rewrites across them
+(library issue #18), not for one that corrects towards a single list.
 
 ## 10. Publish the weights
 
