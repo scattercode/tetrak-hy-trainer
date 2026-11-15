@@ -52,10 +52,12 @@ section once that model is released.
       `runs/v0/harvest` and `runs/v1/harvest-*`: the crop harvester refuses
       stale pages, and the synthetic sampler and word list, which do not,
       would otherwise never see a printed `<`.
-- [ ] **Fresh synthetic pre-train** (step 5), with every harvest passed and
-      the `--classical-share` and `--mixed-share` recorded. v6 and every
-      earlier checkpoint has a 175-class head; `finetune_real.py` refuses
-      anything but 246.
+- [x] **Fresh synthetic pre-train** (step 5), with every harvest passed and
+      the `--classical-share` and `--mixed-share` recorded. Done 13–14
+      November 2026 as `runs/v7-b014` (issue #44; the results paragraph in
+      step 5), then fine-tuned the same day (issue #45; step 7). v6 and
+      every earlier checkpoint has a 175-class head; `finetune_real.py`
+      refuses anything but 246.
 - [x] **Re-harvest every real-crop set** (step 6). Crops harvested under v3
       carry `«` where the page prints `<`, and relabelling cannot restore it;
       `finetune_real.py` refuses an unstamped `real_*` folder. Done the
@@ -222,6 +224,24 @@ hours in.
 - `--eval-dir` scores the packaged result against real pages before you wake
   up, so the honest number is in the log.
 - Interrupted? The checkpoint survives — re-package with `--package-only`.
+- **`--eval-dir` needs easyocr, which this venv does not have.** The v7
+  pre-train ran its eleven hours, packaged, then crashed in the evaluation
+  with `ModuleNotFoundError: easyocr` (14 November 2026). Until the script
+  checks at start-up, leave `--eval-dir` off and score the bundle with
+  `evaluate_registers.py` from the sibling venv (step 8).
+
+**What v7's pre-train produced (brief 014, issue #44, 13–14 November 2026).**
+60,000 lines from all 58 harvests (33 classical by their own text),
+`--classical-share 0.25` (15,220 lines) and `--mixed-share 0.05` (3,000),
+175,500 crops rendered in 195 s, 150,000 iterations in 11.2 h. Best
+synthetic validation 95.13% at iteration 132,000; validation loss bottoms
+near 70,000 and drifts up while accuracy still creeps, the usual CTC shape.
+On the eight original registers the pre-train reads as v4 did (mean word
+recall 0.621 against 0.619), the synthetic-only pre-train v6 was fine-tuned
+from, so a wider head and a quarter classical lines cost nothing on reformed
+text. The artefacts sit in `saved_models/v7-b014-pretrain/` and
+`bundle-pretrain/` so the fine-tune could write `saved_models/v7-b014/` and
+`bundle/` under the same run.
 
 **Mixed-script lines (brief 014).** `--mixed-share 0.05` on either script
 lifts the lines that mix Armenian and Cyrillic tokens to that fraction of the
@@ -386,6 +406,59 @@ The 3,000-iteration re-run scored **0.7356 raw against the long run's
 the time, at the same 95% crop accuracy. A few thousand iterations is the
 right order of magnitude for a fine-tune; the crop number will not tell you
 that, and the page evaluation will.
+
+**What v7's fine-tune produced (brief 014, issue #45, 14–15 November
+2026).** Two runs from the same pre-train checkpoint. The first was brief
+013's recipe on the re-harvested crops: 6,000 iterations,
+`real_train-syn_train-syn_caps_train` at `0.5-0.4-0.1`, 4.3 h, held-out
+real-crop accuracy 90.2% at 6,000 with validation loss still falling. The
+21,574-crop validation set (twice v6's, with classical pages) is why it
+took four hours rather than two — validation every 500 iterations is most
+of the time — and why its 90% is not comparable with v6's 95%. Against v6
+on all eighteen registers (`runs/eval/registers/b014-v7-vs-v6.log`): seven
+of the eight original registers within ±0.02, all ten classical and
+off-Wikisource registers up 0.05–0.19, mean over eighteen 0.801 → 0.847,
+and the Russian in the Tumanyan notes read for the first time, 63 of 81
+Cyrillic tokens. The one loss was the bilingual dictionary, −0.034.
+
+**The dictionary finding, and what fixed it.** Not the Cyrillic lookalikes
+it first looked like: of the 127 English words v6 read and the first run
+did not, 122 were plain Latin misreads (`genlle` for *gentle*, `Ietter` for
+*letter*) and five were lookalikes (`роог` for *poor*). The cause was the
+pre-train's mix — 11,367 synthetic lines with Cyrillic against 708
+Latin-only ones, and Latin in 1% of the real crops — so the shared glyphs
+(`а/a`, `о/o`, `с/c`, `р/p`, `е/e`, `х/x`) had their coin loaded towards
+Cyrillic and the model's Latin had been crowded. The lesson for the next
+charset change: **when a model is first taught a script, give every script
+it already reads a matching share of the synthetic set**, or the old one
+regresses where the two share shapes. Two fixes, both kept:
+
+- The lookalikes are a fold rule (tetrak-easyocr-armenian PR #27): a token
+  with no Armenian letter is written in the one script its unshared letters
+  show, and a token of shared glyphs alone follows the text around it.
+  Re-scored from saved readings of all eighteen registers it never moves a
+  register down (`b014-fold-latin-cyrillic.log`).
+- The misreads are training. `syn_latin`: 30,000 English lines from six
+  public-domain novels laid out as a harvest-style folder
+  (`runs/latin-text/gutenberg-en/text/*.txt`; `clean_token_runs` needs no
+  manifest), rendered with `render_synthetic_set.py --upper-share 0.1`
+  (58,500 crops, 42 s). The second fine-tune was the first's recipe with
+  the English set at a tenth of each batch, taken from the synthetic share:
+  `--select-data real_train-syn_train-syn_caps_train-syn_latin_train
+  --batch-ratio 0.5-0.3-0.1-0.1 --iters 6000`, 4.1 h, 89.6% at 6,000.
+
+The second run is the v7 candidate (`runs/v7-b014/bundle`; the first is
+kept as `bundle-ft-nolatin`). Against v6: dictionary 0.663 against 0.667,
+seven of eight original registers within ±0.02 and the medical
+encyclopedia −0.022 (−0.015 with the fold), the ten newer registers 0.824
+against the first run's 0.833 and v6's 0.744, mean over eighteen 0.843. The
+English set tilted the shared glyphs the other way on the Russian pages
+(52 of 81 raw) and the fold rule brings 61 back — the two fixes need each
+other. Tables: `b014-v7-english-vs-first-attempt.log` (three-way, from
+saved readings) and `b014-v7-english-vs-v6.log` (official). A re-scoring
+trick worth keeping: save each bundle's raw page readings once
+(`evaluate.load_reader` + `read_page` per image) and score folds offline;
+a register run costs half an hour of MPS, a re-score costs seconds.
 
 ## 8. Measure what actually moved
 
