@@ -14,11 +14,20 @@ additionally drops the pages a real-crop dataset was cut from, which is
 what choosing the decoder's threshold on that dataset's validation crops
 needs (brief 013 Stage 2).
 
+``--orthography classical`` (or ``reformed``) keeps only the harvests whose
+own text is in that orthography, judged as the synthetic sampler judges
+them: ``orthography.markers`` over the harvest's non-held-out pages, so a
+harvest in the mixed band or too short to say is left out of both lists.
+Brief 014 ships a classical list beside the modern one, because a single
+list built from reformed harvests "corrects" classical spellings (final
+``յ``, free ``ւ``) to modern ones. The default, ``all``, is the v6 recipe.
+
 ``--nayiri`` adds every word form of the Nayiri Armenian Lexicon
 (http://www.nayiri.com/nayiri-armenian-lexicon, CC BY 4.0: "Nayiri Armenian
 Lexicon (c) Serouj Ourishian"), counted as ``--min-count`` so the decoder
 keeps them. Its current release is Western Armenian in traditional
-orthography, where it extends coverage well beyond the harvest.
+orthography, where it extends coverage well beyond the harvest -- so it
+belongs with the classical list, not the modern one.
 
 The word list is derived from CC BY-SA 3.0 Wikisource text (and, with
 ``--nayiri``, CC BY 4.0 data); its attribution travels with it wherever it
@@ -33,7 +42,8 @@ and the others the defaults name.
 Run:
     python scripts/build_wordlist.py --out runs/v6-b013/wordlist.tsv.gz \\
         [--nayiri nayiri-armenian-lexicon-2026-04-25-v3.json] \\
-        [--exclude-crops runs/v6-b013/all_data/real_val]
+        [--exclude-crops runs/v6-b013/all_data/real_val] \\
+        [--orthography all|classical|reformed]
 """
 
 from __future__ import annotations
@@ -50,7 +60,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
-from tetrak_hy_trainer import heldout, wikisource  # noqa: E402
+from tetrak_hy_trainer import heldout, orthography, wikisource  # noqa: E402
 
 _ARMENIAN_LETTER = re.compile(r"[Ա-Ֆա-և]")
 # The decoder's key: Armenian letters only, so U+055A-U+055F (՝ ՛ ՜ ՞),
@@ -88,33 +98,71 @@ def crop_pages(folder: Path) -> dict[str, set[int]]:
     return pages
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--nayiri", type=Path, default=None)
-    parser.add_argument("--min-count", type=int, default=2)
-    parser.add_argument("--exclude-crops", type=Path, default=None)
-    args = parser.parse_args()
+ALL = "all"
+ORTHOGRAPHIES = (ALL, orthography.CLASSICAL, orthography.REFORMED)
 
-    excluded = crop_pages(args.exclude_crops) if args.exclude_crops else {}
+
+def count_words(
+    directories: list[Path],
+    excluded: dict[str, set[int]],
+    wanted: str = ALL,
+) -> tuple[collections.Counter[str], int, int, dict[str, str]]:
+    """Count the words of *directories*' non-held-out pages.
+
+    A harvest is judged whole, from the pages that survive the held-out and
+    crop exclusions, exactly as ``train_synthetic.py`` judges it; with
+    *wanted* set, a harvest of any other verdict (the other orthography,
+    ``mixed`` or ``unknown``) contributes nothing. Returns the counts, the
+    pages read, the held-out pages skipped and each harvest's verdict.
+    """
     counts: collections.Counter[str] = collections.Counter()
     read = held_out = 0
-    for directory in harvest_dirs():
+    verdicts: dict[str, str] = {}
+    for directory in directories:
         index = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))["index"]
-        for text_file in (directory / "text").glob("*.txt"):
+        pages: list[str] = []
+        for text_file in sorted((directory / "text").glob("*.txt")):
             page = int(text_file.stem)
             if heldout.page_is_held_out(index, page):
                 held_out += 1
                 continue
             if page in excluded.get(source_slug(directory.name), ()):
                 continue
-            read += 1
-            text = wikisource.normalise_transcript(text_file.read_text(encoding="utf-8"), index)
+            pages.append(
+                wikisource.normalise_transcript(text_file.read_text(encoding="utf-8"), index)
+            )
+        verdict = orthography.classify("\n".join(pages))
+        verdicts[directory.name] = verdict
+        if wanted != ALL and verdict != wanted:
+            continue
+        read += len(pages)
+        for text in pages:
             for token in text.split():
                 word = _EDGES.sub("", token).lower()
                 if word and _ARMENIAN_LETTER.search(word):
                     counts[word] += 1
-    print(f"{read} pages read, {held_out} held-out pages skipped, {len(counts)} word types")
+    return counts, read, held_out, verdicts
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--nayiri", type=Path, default=None)
+    parser.add_argument("--min-count", type=int, default=2)
+    parser.add_argument("--exclude-crops", type=Path, default=None)
+    parser.add_argument("--orthography", choices=ORTHOGRAPHIES, default=ALL)
+    args = parser.parse_args()
+
+    excluded = crop_pages(args.exclude_crops) if args.exclude_crops else {}
+    counts, read, held_out, verdicts = count_words(harvest_dirs(), excluded, args.orthography)
+    used = sorted(n for n, v in verdicts.items() if args.orthography in (ALL, v))
+    for name in sorted(verdicts):
+        mark = "+" if name in used else "-"
+        print(f"  {mark} {name}: {verdicts[name]}")
+    print(
+        f"{len(used)} of {len(verdicts)} harvests used ({args.orthography}), "
+        f"{read} pages read, {held_out} held-out pages skipped, {len(counts)} word types"
+    )
 
     if args.nayiri:
         data = json.loads(args.nayiri.read_text(encoding="utf-8"))
@@ -142,8 +190,9 @@ def main() -> int:
             kept += 1
     print(f"wrote {args.out}: {kept} words at or above {args.min_count} of {len(counts)}")
 
+    which = "" if args.orthography == ALL else f"{args.orthography}-orthography "
     attribution = (
-        "Word counts from proofread Armenian Wikisource transcripts (CC BY-SA "
+        f"Word counts from proofread {which}Armenian Wikisource transcripts (CC BY-SA "
         "3.0), evaluation pages and pages printing their text excluded"
     )
     nayiri = None
@@ -167,6 +216,9 @@ def main() -> int:
                 "pages_read": read,
                 "held_out_pages_skipped": held_out,
                 "crop_pages_excluded": str(args.exclude_crops) if args.exclude_crops else None,
+                "orthography": args.orthography,
+                "harvests_used": used,
+                "harvests_skipped": {n: v for n, v in verdicts.items() if n not in used},
                 "nayiri": nayiri,
                 # Derived from CC BY-SA text, so share-alike; CC BY data may
                 # be included in a BY-SA 4.0 work.
