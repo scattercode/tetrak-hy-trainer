@@ -506,6 +506,31 @@ reformed forms sit in the classical list at low counts: fine for a decoder
 that accepts a token in either list and never rewrites across them
 (library issue #18), not for one that corrects towards a single list.
 
+**Re-check τ with each model.** The decoder's threshold was chosen on
+v5's held-out crops and has to be confirmed on the new model's, with the
+lists rebuilt without those crops' pages (`--exclude-crops`). Two scripts
+do it without re-running the model per list or per τ:
+
+```bash
+../tetrak-easyocr-armenian/.venv/bin/python -W ignore scripts/capture_nbest.py \
+    runs/<run>/bundle runs/<run>/all_data/real_val runs/<run>/tau/nbest.jsonl
+../tetrak-easyocr-armenian/.venv/bin/python scripts/score_tau.py runs/<run>/tau/nbest.jsonl \
+    modern=… classical=… union=…,… --taus 1,3,5,8,12 --by-orthography <build log>
+```
+
+`capture_nbest.py` runs the bundle over the crops once and saves every
+word's beam candidates (21,574 crops in under five minutes on MPS;
+`-W ignore` keeps a per-crop MPS warning out of the log); `score_tau.py`
+applies the decoder's rule offline for any lexicon and any τ, in seconds,
+and with `--by-orthography` splits the figures by the orthography of each
+crop's source harvest. On v7 (15 November 2026, `runs/v7-b014/tau/`): τ = 5
+is again the peak for the union of the two lists, exact-match 0.900 → 0.916,
+393 crops fixed for 46 broken, with 4 and 6 within 0.001 and 12 breaking as
+many as it fixes. The split is the argument for two lists in one table: the
+modern list alone is −19 net on the 8,547 crops from classical harvests
+(178 fixed, 197 broken) and +127 on the 13,027 reformed; the union is +223
+and +124.
+
 ## 10. Publish the weights
 
 ```bash
