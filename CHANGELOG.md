@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-11-15
+
+### Changed
+
+- Record the brief 014 re-harvest results (#77)
+- Record the v7 pre-train, fine-tune and dictionary finding (#79)
+- Bump ruff from 0.17.3 to 0.17.4 (#80)
+- Build a classical list beside the modern one (#81)
+
 ## [0.14.0] - 2026-11-09
 
 ### Changed
