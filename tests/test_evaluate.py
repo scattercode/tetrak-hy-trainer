@@ -99,6 +99,23 @@ def test_the_transform_is_applied_to_both_sides(tmp_path: Path) -> None:
     assert folded.mean_word_recall == 1.0
 
 
+def test_saved_readings_are_the_raw_text_before_any_transform(tmp_path: Path) -> None:
+    """A saved reading is what the model said, so a new fold can be re-scored on it."""
+    eval_dir = build_eval_dir(tmp_path, {1: "ՀԱՅ"}, with_images={1})
+    reader = FakeReader({"1": ["HԱՅ", "երկրորդ"]})
+
+    evaluate.score_pages(
+        tmp_path / "bundle",
+        eval_dir,
+        reader=reader,
+        transform=lambda text: text.replace("H", "Հ"),
+        readings_dir=tmp_path / "readings",
+    )
+
+    saved = (tmp_path / "readings" / "set" / "1.txt").read_text(encoding="utf-8")
+    assert saved == "HԱՅ\nերկրորդ"
+
+
 def test_boxes_are_joined_with_newlines(tmp_path: Path) -> None:
     """Tetrak's backend joins detected boxes with newlines; so must this."""
     reader = FakeReader({"1": ["առաջին", "երկրորդ"]})

@@ -29,6 +29,10 @@ never deliver.
 sides. That is what a consumer of the model actually sees, since every
 consumer folds; the raw figure is the model alone.
 
+``--save-readings DIR`` keeps every page's raw reading under
+``DIR/<set>/<page>.txt``, so a change to the fold or the metric can be
+re-scored from the saved text without running the model again.
+
 Prerequisites: needs easyocr and torch, so run it with the **sibling
 library's venv**, the same interpreter ``harvest_real_crops.py`` needs:
 
@@ -81,6 +85,13 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="also apply the shipped script fold, as every consumer does",
     )
+    parser.add_argument(
+        "--save-readings",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help="keep each page's raw reading as DIR/<set>/<page>.txt",
+    )
     args = parser.parse_args(argv)
 
     transform = None
@@ -110,7 +121,13 @@ def main(argv: list[str] | None = None) -> int:
         reader = evaluate.load_reader(bundle)
         results = []
         for eval_dir in sets:
-            result = evaluate.score_pages(bundle, eval_dir, reader=reader, transform=transform)
+            result = evaluate.score_pages(
+                bundle,
+                eval_dir,
+                reader=reader,
+                transform=transform,
+                readings_dir=args.save_readings and args.save_readings / bundle.name,
+            )
             if not len(result):
                 print(f"{eval_dir.name:<24} {'-':>5}   no page images")
                 continue
