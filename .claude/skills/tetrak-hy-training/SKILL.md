@@ -474,6 +474,18 @@ For the full backend comparison, `evaluate_baselines.py` from Tetrak's venv;
 when only the metric changes, `rescore_baselines.py` re-scores the saved
 readings in seconds.
 
+**Save the raw readings** (`evaluate_registers.py --save-readings DIR`)
+whenever a model is scored on the registers: a fold rule or a metric
+change is then measured on the saved text in seconds, with no model run
+and no re-detection noise. Brief 014's two fold rules (the Latin/Cyrillic
+token script, library PR #27; the three-way decision and the `եւ`/`և`
+rule, PR #30) were both decided that way, and the readings they used are
+kept under `runs/v7-b014/readings-registers/{v6,v7-ft-nolatin,v7}` with
+the results in `runs/eval/registers/b014-fold-*.log`. A fold rule that
+moves nothing on the saved readings is still worth shipping when it is
+the policy (a Cyrillic `о` inside an Armenian token can never be meant);
+one that moves a register down is not.
+
 ## 9. Build the word list
 
 ```bash

@@ -95,6 +95,7 @@ def score_pages(
     reader=None,
     transform: Callable[[str], str] | None = None,
     on_page: Callable[[PageScore], None] | None = None,
+    readings_dir: Path | None = None,
 ) -> EvaluationResult:
     """Score every page of *eval_dir* that has an image.
 
@@ -109,6 +110,11 @@ def score_pages(
             sides for the comparison to mean anything.
         on_page: Called with each page's score as it is computed, for
             callers that stream progress into a log.
+        readings_dir: Where to keep each page's raw reading, as
+            ``<readings_dir>/<set>/<page>.txt``, before any transform. A
+            fold rule or a metric change is then re-scored from the saved
+            text in seconds, without the model (brief 014's fold rules were
+            both measured that way).
 
     Returns:
         The per-page scores and their averages. Pages whose image is
@@ -126,6 +132,10 @@ def score_pages(
             continue
         expected = (eval_dir / entry["text"]).read_text(encoding="utf-8")
         text = read_page(reader, image)
+        if readings_dir is not None:
+            page_dir = readings_dir / eval_dir.name
+            page_dir.mkdir(parents=True, exist_ok=True)
+            (page_dir / f"{entry['page_number']}.txt").write_text(text, encoding="utf-8")
         if transform is not None:
             text, expected = transform(text), transform(expected)
         score = PageScore(
