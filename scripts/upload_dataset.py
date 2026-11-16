@@ -10,7 +10,8 @@
 """Package the training data and upload it to the Hugging Face Hub.
 
 Builds the ``tetrak/armenian-ocr-crops`` dataset from what lives under
-``runs/`` and pushes it as three configurations:
+``runs/`` and pushes it as one configuration per synthetic crop set that
+trained a released model, plus the corpus:
 
 - ``corpus`` — the harvested, proofread Armenian Soviet Encyclopedia
   pages (``runs/v0/harvest`` plus every ``runs/v1/harvest-vol*``), one
@@ -24,6 +25,20 @@ Builds the ``tetrak/armenian-ocr-crops`` dataset from what lives under
   (``runs/v1/all_data``), the same columns and splits, line-shaped
   crops of 1-4 consecutive tokens with degradations applied to both
   splits. This is the set that trained the published v1 weights.
+- ``crops-v4`` — the 351,000-crop pre-train set rendered from the
+  fourteen-work corpus in fifteen faces (``runs/v4/all_data``), which
+  pre-trained v4 and, through fine-tunes, v5 and v6 (v6 with the
+  colon relabelled by ``scripts/relabel_dataset.py``).
+- ``crops-v6-caps`` — v6's all-caps headword lines
+  (``runs/v6-b013/all_data/syn_caps``).
+- ``crops-v7``, ``crops-v7-caps``, ``crops-v7-latin`` — v7's pre-train
+  set over all 58 works with a quarter classical orthography and a
+  twentieth mixing Armenian with Russian, its all-caps set, and its
+  English set from six Project Gutenberg novels (``runs/v7-b014/all_data``).
+
+The real crops cut from scans (``real_train``/``real_val``) are not
+published: they are fragments of the scanned pages themselves, and are
+reproducible from the transcripts with ``scripts/harvest_real_crops.py``.
 
 The repository is created **private**; review the card and viewer on
 the Hub, then flip it public from the repo's settings page (or rerun
@@ -45,7 +60,6 @@ domestic uplink. Use ``--only`` to push one configuration at a time.
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import re
 import sys
@@ -58,12 +72,18 @@ CARD = Path(__file__).resolve().parent / "dataset_card.md"
 _VOLUME = re.compile(r"(\d+)\.djvu$")
 
 # Crop configuration -> its (train, validation) split directories under runs/.
-# The mapping is explicit because the two sets are different data, not two
-# renders of one recipe: `crops` is v0's single-word crops, `crops-v1` the
-# line-shaped ones that trained v1.
+# The mapping is explicit because the sets are different data, not renders of
+# one recipe: `crops` is v0's single-word crops, `crops-v1` the line-shaped
+# ones that trained v1, and so on. Each set is published as the trainer read
+# it, so a released model's provenance can name a configuration and mean it.
 CROP_CONFIGS = {
     "crops": ("v0/all_data/v0_train", "v0/all_data/v0_val"),
     "crops-v1": ("v1/all_data/syn_train", "v1/all_data/syn_val"),
+    "crops-v4": ("v4/all_data/syn_train", "v4/all_data/syn_val"),
+    "crops-v6-caps": ("v6-b013/all_data/syn_caps", "v6-b013/all_data/syn_caps_val"),
+    "crops-v7": ("v7-b014/all_data/syn_train", "v7-b014/all_data/syn_val"),
+    "crops-v7-caps": ("v7-b014/all_data/syn_caps_train", "v7-b014/all_data/syn_caps_val"),
+    "crops-v7-latin": ("v7-b014/all_data/syn_latin_train", "v7-b014/all_data/syn_latin_val"),
 }
 
 
@@ -98,14 +118,24 @@ def corpus_rows(runs: Path) -> list[dict]:
 
 
 def crop_rows(split_dir: Path) -> list[dict]:
-    """``image`` (path) + ``text`` rows from a trainer-format split."""
+    """``image`` (path) + ``text`` rows from a trainer-format split.
+
+    ``labels.csv`` is read the way the trainer reads it, not as CSV: each
+    line splits at its first comma and the rest is the label verbatim
+    (``synth.write_labels``). A label may contain commas and quotation
+    marks -- the English set's do -- and a CSV reader would treat a
+    leading quotation mark as quoting and swallow the lines that follow.
+    """
     rows: list[dict] = []
-    with (split_dir / "labels.csv").open(newline="", encoding="utf-8") as handle:
-        for record in csv.DictReader(handle):
-            image = split_dir / record["filename"]
-            if not image.is_file():
-                raise FileNotFoundError(image)
-            rows.append({"image": str(image), "text": record["words"]})
+    lines = (split_dir / "labels.csv").read_text(encoding="utf-8").splitlines()
+    if lines[:1] != ["filename,words"]:
+        raise ValueError(f"{split_dir / 'labels.csv'} does not start with the trainer's header")
+    for line in lines[1:]:
+        filename, _, text = line.partition(",")
+        image = split_dir / filename
+        if not image.is_file():
+            raise FileNotFoundError(image)
+        rows.append({"image": str(image), "text": text})
     return rows
 
 
@@ -177,6 +207,12 @@ def main() -> int:
         action="store_true",
         help="re-push scripts/dataset_card.md to the existing repository and exit",
     )
+    parser.add_argument(
+        "--tag",
+        default=None,
+        help="after pushing, tag the repository's head with this name (the weights version "
+        "the pushed configurations trained, e.g. v7), so provenance can pin a revision",
+    )
     args = parser.parse_args()
 
     from huggingface_hub import HfApi
@@ -225,8 +261,14 @@ def main() -> int:
         )
         print(f"Pushed {name}.")
     push_card(args.repo_id)
-    print(f"Done: https://huggingface.co/datasets/{args.repo_id} (private — review, then")
-    print("flip it public in the repo settings or rerun with --make-public).")
+    if args.tag:
+        api.create_tag(args.repo_id, tag=args.tag, repo_type="dataset", exist_ok=True)
+        print(f"Tagged {args.tag}.")
+    print(f"Done: https://huggingface.co/datasets/{args.repo_id}.")
+    print(
+        "A repository created by this run is private: review it, then rerun with "
+        "--make-public. An existing public repository is live already."
+    )
     return 0
 
 
