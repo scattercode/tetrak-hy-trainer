@@ -83,7 +83,10 @@ reader = tetrak_hy.reader()
 lexicon.use_lexicon(reader, lexicon.load_wordlists("wordlist.tsv.gz", "wordlist-classical.tsv.gz"))
 page = reader.readtext("page.png", decoder="beamsearch")
 context = "\n".join(text for _, text, _ in page)
-results = [(box, tetrak_hy.fold_script(text, context=context), confidence) for box, text, confidence in page]
+results = [
+    (box, tetrak_hy.fold_script(text, context=context), confidence)
+    for box, text, confidence in page
+]
 ```
 
 `decoder="beamsearch"` is how the model's probabilities reach the word lists. Without it, `readtext` decodes greedily as before. `tetrak_hy.reader(lexicon=True)` does the download and the wiring for you.
