@@ -189,6 +189,7 @@ def render_corpus(
     seed: int = 0,
     names: tuple[str, str] = ("syn_train", "syn_val"),
     families: dict[str, str] | None = None,
+    faint_share: float = 0.0,
 ) -> tuple[Path, int]:
     """Render train/val folders in the trainer's format; return (root, count).
 
@@ -219,6 +220,10 @@ def render_corpus(
     drawn as often as one with a single face. Left out, every face and size
     is equally likely, exactly as before: the random draws are unchanged,
     so a seeded corpus renders the same crops it always has.
+
+    *faint_share* is the fraction of crops degraded to a faint grey
+    photograph (``augment.faint``, brief 023). At 0, the default, no random
+    draw is made for it, so the same holds.
     """
     from PIL import ImageFont
 
@@ -255,7 +260,7 @@ def render_corpus(
                 font = rng.choice(eligible)[0]
             image = synth.render_word(line, font, jitter=rng)
             if use_augment:
-                image = augment.degrade(image, rng)
+                image = augment.degrade(image, rng, faint_share=faint_share)
             name = f"{index:06d}_{repeat}.png"
             if is_val:
                 image.save(val_dir / name)

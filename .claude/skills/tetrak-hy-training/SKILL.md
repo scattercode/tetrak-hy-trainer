@@ -186,6 +186,16 @@ text. The artefacts sit in `saved_models/v7-b014-pretrain/` and
 `bundle-pretrain/` so the fine-tune could write `saved_models/v7-b014/` and
 `bundle/` under the same run.
 
+**Faint photographs (brief 023).** `--faint-share 0.2` on
+`render_synthetic_set.py` degrades that fraction of crops to a grey
+photograph of a page (`augment.faint`): paper at 150 to 215, ink only 45 to
+100 grey levels below it, a little grain. `tone` never goes fainter than
+about a hundred levels, and the Abovyan evaluation pages sit at 58 to 78
+(measured 16 November 2026), which nothing before this lever rendered. At
+`0`, the default, no random draw is made for it, so every earlier seeded
+set is still reproduced crop for crop. The share is recorded in
+`recipe.json`; choose it on validation crops, never on an evaluation page.
+
 **Mixed-script lines (brief 014).** `--mixed-share 0.05` on either script
 lifts the lines that mix Armenian and Cyrillic tokens to that fraction of the
 sample; `0` (the default) keeps the natural rate and the draws of every
