@@ -486,6 +486,25 @@ moves nothing on the saved readings is still worth shipping when it is
 the policy (a Cyrillic `о` inside an Armenian token can never be meant);
 one that moves a register down is not.
 
+**The full-pipeline gate** is Tetrak's, not this repository's: brief 014's
+"ours" is recogniser + lexicon + fold + layout, so a candidate bundle is
+measured with `tetrak/tools/dump_layout_spans.py --bundle runs/<run>/bundle
+--wordlist <modern> --wordlist <classical> --out evaluation/layout/spans-<run>`
+and then `tools/register_comparison.py --spans … --ours-label 'tetrak-hy <run>
+(ours)'`, both from Tetrak's venv (`uv sync --inexact --extra easyocr --extra
+armenian` gives it easyocr and the library). Re-score the released model's
+cached spans through the same tools first: the result must reproduce
+`evaluation/ocr/registers.csv`, or the two columns are not comparable. The
+trainer's raw figure for the same weights is lower and is not
+interchangeable with the pipeline's. v7 on 15–16 November 2026
+(`runs/eval/registers/b014-v7-full-pipeline.log`): mean word recall over
+seventeen registers 0.861 → 0.892, down on five of the eight old registers
+by 0.003–0.018 with raw deltas of the same size, so a pipeline loss that
+matches the raw loss is the recogniser's; one that does not is the
+lexicon's or the fold's. Externals come from the saved `baselines*.csv`;
+Marker no longer runs in Tetrak's venv (withdrawn over Pillow 13), so a
+new set gets Tesseract and Calfa only unless that changes.
+
 ## 9. Build the word list
 
 ```bash
