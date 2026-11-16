@@ -133,6 +133,13 @@ def main() -> int:
         "0 is the natural rate, and keeps brief 019's seeded sets reproducible; "
         "the pre-train defaults to 0.25",
     )
+    parser.add_argument(
+        "--faint-share",
+        type=float,
+        default=0.0,
+        help="this fraction of crops degraded to a faint grey photograph (brief 023); "
+        "0 draws nothing for it, so earlier seeded sets stay reproducible",
+    )
     parser.add_argument("--seed", type=int, default=13)
     args = parser.parse_args()
 
@@ -193,6 +200,7 @@ def main() -> int:
         seed=args.seed,
         names=(f"{args.name}_train", f"{args.name}_val"),
         families=families,
+        faint_share=args.faint_share,
     )
     sampling.write_recipe(
         root / f"{args.name}_train",
@@ -204,6 +212,7 @@ def main() -> int:
         lines=len(samples),
         upper=args.upper,
         upper_share=args.upper_share,
+        faint_share=args.faint_share,
         index=args.index,
         repeats=args.repeats,
         seed=args.seed,
