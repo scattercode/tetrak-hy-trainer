@@ -21,6 +21,9 @@ Takes a bundle directory produced by the trainer's packaging step
   the bundle is EasyOCR's own detector and is never uploaded.)
 - ``model.safetensors`` — the same tensors converted from the ``.pth``,
   with the DataParallel ``module.`` prefix stripped.
+- ``wordlist.tsv.gz`` and, from v7, ``wordlist-classical.tsv.gz`` — the
+  two word lists ``tetrak_hy.lexicon`` decodes with (``--wordlist`` and
+  ``--classical-wordlist``), each with its attribution in the provenance.
 - ``provenance.json`` — recipe, dataset revision, charset, checksums.
 - ``README.md`` — from ``scripts/model_card.md``.
 
@@ -82,14 +85,22 @@ REAL_EVAL_METRIC_V6 = (
     "tetrak_hy_trainer.accuracy after brief 013: difflib autojunk off; "
     "։ scored as : and ․ as .; punctuation-only tokens not counted as words"
 )
+# Brief 014 added one equivalence: the two-letter եւ and the ligature և are
+# one word printed two ways, so neither engine nor transcriber is scored on
+# which it set. It moved no leader on any register.
+REAL_EVAL_METRIC_V7 = REAL_EVAL_METRIC_V6 + "; եւ scored as և (brief 014)"
 
-# The word list tetrak_hy.lexicon decodes with, published beside the
-# weights from v6 on. Its attribution travels with it, read from the
-# sidecar build_wordlist.py writes so it names the inputs actually used.
+# The word lists tetrak_hy.lexicon decodes with, published beside the
+# weights: one from v6 on, and from v7 a second built from the
+# classical-orthography harvests, which the decoder reads as a union so a
+# spelling in either is never rewritten into the other's (brief 014). Each
+# list's attribution travels with it, read from the sidecar
+# build_wordlist.py writes so it names the inputs actually used.
 WORDLIST_NAME = "wordlist.tsv.gz"
+CLASSICAL_WORDLIST_NAME = "wordlist-classical.tsv.gz"
 
 
-def wordlist_record(wordlist: Path) -> dict:
+def wordlist_record(wordlist: Path, name: str = WORDLIST_NAME) -> dict:
     """The provenance entry for a word list, refusing one that cannot ship.
 
     It is published as a ``.gz`` name, so plain text would be an asset that
@@ -106,9 +117,10 @@ def wordlist_record(wordlist: Path) -> dict:
         raise SystemExit(f"{sidecar} is missing; rebuild the list with scripts/build_wordlist.py")
     meta = json.loads(sidecar.read_text(encoding="utf-8"))
     return {
-        "file": WORDLIST_NAME,
+        "file": name,
         "sha256": sha256(wordlist),
         "words": meta["words"],
+        "orthography": meta.get("orthography", "all"),
         "nayiri": meta["nayiri"],
         "licence": meta["licence"],
         "attribution": meta["attribution"],
@@ -156,6 +168,18 @@ SYN_CAPS_VALIDATION_TRAINED = (
     "validation crops. Nothing published is measured on them; the "
     "checkpoint was chosen on held-out real crops. "
     "render_synthetic_set.py now names its folders <name>_train and <name>_val."
+)
+
+OLD_REGISTER_LOSSES = (
+    "Measured through Tetrak's pipeline on 2026-11-16, v7 reads five of the "
+    "eight registers v6 was released on slightly worse by word recall "
+    "(Faustus of Byzantium -0.018, medical encyclopedia -0.016, Otyan "
+    "-0.014, Baronian vol. 10 -0.007, Totovents -0.003), the same size as "
+    "the raw differences, so the losses are the recogniser's rather than "
+    "the word lists' or the fold's. Shipped knowingly (brief 014 decision "
+    "log, 2026-11-16) for the classical-orthography gains of +0.04 to +0.10 "
+    "on eight of the nine new registers and for Cyrillic, which v6 cannot "
+    "read at all. v6 stays tagged for a caller reading reformed print only."
 )
 
 MISSING_ABBREVIATION_DOT = (
@@ -582,6 +606,196 @@ VERSIONS = {
             ),
         },
     },
+    "v7": {
+        # runs/v7-b014/ -- brief 014: a pre-train from scratch on every
+        # harvest with classical orthography a quarter of the lines, then a
+        # fine-tune on twice v6's real crops with English lines in each batch.
+        "recipe": (
+            "scripts/train_synthetic.py --iters 150000 --classical-share 0.25 "
+            "--mixed-share 0.05 over all 58 harvests (60,000 lines, 175,500 "
+            "crops, charset v5; best synthetic validation at iteration "
+            "132,000), then scripts/finetune_real.py --iters 6000 from that "
+            "checkpoint, batches mixing real crops 0.5, the pre-train's "
+            "synthetic set 0.3, all-caps lines 0.1 and English lines 0.1 "
+            "(scripts/render_synthetic_set.py --upper, and --upper-share 0.1 "
+            "over six Project Gutenberg novels); checkpoint chosen on held-out "
+            "real crops (iteration 5,000)"
+        ),
+        "dataset_config": None,
+        "dataset_note": (
+            "217,362 real crops (21,574 held out by page) cut with v6 from "
+            "2,136 scanned pages of 42 sources: v6's 16 plus 26 "
+            "classical-orthography works harvested for brief 014, diaspora "
+            "and pre-reform editions of Abovyan, Baronian, Kajaznuni, "
+            "Khatisian, Khrimian, Toranian, Teodik and others. Three-column "
+            "pages are split into their columns before alignment. Every "
+            "evaluation page, and every page printing one's text "
+            "(tetrak_hy_trainer.heldout), is excluded from the synthetic "
+            "sample, the real crops and both word lists; nothing is inherited "
+            "from an earlier model, the pre-train being from scratch. Crops "
+            "whose label has a wholly Cyrillic token are kept (8); a token "
+            "mixing Cyrillic with Armenian or Latin letters drops its crop"
+        ),
+        "charset": {
+            "num_class": 246,
+            "added": [
+                "< > ³ ± (charset v4, 2026-10-04)",
+                "՚ U+055A, the Armenian apostrophe of elision (charset v5)",
+                "the Russian alphabet in both cases including ё/Ё, 66 letters (charset v5)",
+            ],
+            "note": (
+                "245 characters plus the CTC blank, against v6's 174 plus "
+                "blank. v4's angle brackets came with a label change: a "
+                "printed '<' (the encyclopedia's derivation sign) is labelled "
+                "as itself where earlier harvests folded it to «, so crops "
+                "harvested before 2026-11-09 were re-cut. v5 (brief 014 "
+                "Stage 1) adds the one printed character the classical "
+                "harvests brought, and Russian for the apparatus of Soviet "
+                "editions. Both are generated from Unicode ranges in "
+                "tetrak_hy_trainer.charset; a charset change is a new model "
+                "by construction, so take the yaml and the weights from the "
+                "same revision"
+            ),
+        },
+        "known_defects": [OLD_REGISTER_LOSSES],
+        # The pre-train's faces (runs/v7-b014/train.log `fonts:`); the
+        # all-caps and English sets used the same fifteen. The twelve GHEA
+        # and Arnamu faces draw Cyrillic; the other three are kept off
+        # lines with a Russian word.
+        "fonts": [
+            "GHEAGpalatBld.otf",
+            "GHEAGrapalatBlit.otf",
+            "GHEAGrapalatRit.otf",
+            "GHEAGrpalatReg.otf",
+            "GHEAMariamBld.otf",
+            "GHEAMariamBlit.otf",
+            "GHEAMariamRIt.otf",
+            "GHEAMariamReg.otf",
+            "NotoSansArmenian.ttf",
+            "NotoSerifArmenian.ttf",
+            "arnamu.ttf",
+            "arnamu_bold.ttf",
+            "arnamu_italic.ttf",
+            "arnamu_italic_bold.ttf",
+            "Mshtakan.ttc",
+        ],
+        "synthetic_validation": {
+            "word_accuracy": 95.133,
+            "norm_edit_distance": 0.9943,
+            "note": (
+                "the pre-train's own degraded validation crops, best at "
+                "iteration 132,000 of 150,000"
+            ),
+        },
+        "real_crop_validation": {
+            "word_accuracy": 89.881,
+            "norm_edit_distance": 0.9864,
+            "note": (
+                "21,574 crops from pages held out of the fine-tune, all 42 "
+                "sources, at the chosen checkpoint (iteration 5,000). Lower "
+                "than v6's 95.2 because the held-out set is twice the size "
+                "and a third of it classical print and diaspora faces"
+            ),
+        },
+        "real_scan_evaluation": {
+            "char_similarity": 0.3493,
+            "word_recall": 0.8457,
+            "pages": 10,
+            "source": REAL_EVAL_SOURCE,
+            "metric": REAL_EVAL_METRIC_V7,
+            "baselines": {
+                "tetrak-hy-v6": {"char_similarity": 0.3475, "word_recall": 0.8379},
+                "hye-calfa-n": {"char_similarity": 0.9600, "word_recall": 0.8426},
+                "hye-paddle": {"char_similarity": 0.3342, "word_recall": 0.8648},
+                "marker": {"char_similarity": 0.5262, "word_recall": 0.8358},
+                "tesseract-hye": {"char_similarity": 0.9456, "word_recall": 0.7728},
+            },
+            "note": (
+                "the model alone, joined in detector order: char_similarity "
+                "here measures reading order on three-column pages, not "
+                "recognition. Tetrak's pipeline (layout, both word lists, "
+                "fold) scores 0.971 / 0.911 on the same pages"
+            ),
+        },
+        "per_register_evaluation": {
+            "metric": "mean word recall, model alone (no fold, no layout)",
+            "source": (
+                "runs/eval/<work>/ built by scripts/build_eval_sets.py; "
+                "scored by scripts/evaluate_registers.py "
+                "(runs/eval/registers/b014-v7-english-vs-v6.log)"
+            ),
+            "registers": {
+                "abovyan-vol1": 0.7652,
+                "aghbalyan-criticism": 0.7879,
+                "aram-manukyan-documents": 0.8727,
+                "ase-vol2": 0.8457,
+                "baronian-azgayin-jojer": 0.8285,
+                "baronian-vol10": 0.9010,
+                "dictionary-hy-en": 0.6628,
+                "faustus-1968": 0.8586,
+                "haykakan-tpagrutyun": 0.8739,
+                "kajaznuni-azg-ew-hayrenik": 0.8371,
+                "khatisian-memoirs": 0.6719,
+                "khrimian-works": 0.9286,
+                "medical-encyclopedia": 0.9041,
+                "mshak": 0.7421,
+                "otyan-works": 0.9241,
+                "toranian-erkirner-ew-marder": 0.9317,
+                "totovents-works": 0.9231,
+                "tumanyan-elzh5": 0.9122,
+            },
+            "mean_over_registers": 0.8428,
+            "baseline_v6_mean": 0.8010,
+            "note": (
+                "eighteen registers: v6's eight, nine classical-orthography "
+                "works added by brief 014 and two pages of the Mshak newspaper "
+                "(1870s, not from Wikisource). v6 re-scored on the same pages "
+                "under the same metric"
+            ),
+        },
+        "full_pipeline_evaluation": {
+            "metric": (
+                "mean word recall through Tetrak's pipeline: layout, both word "
+                "lists, fold with page context"
+            ),
+            "source": (
+                "tetrak/tools/register_comparison.py over the trainer's "
+                "runs/eval/<work>/, 2026-11-16 "
+                "(runs/eval/registers/b014-v7-full-pipeline.log)"
+            ),
+            "registers": {
+                "abovyan-vol1": 0.7939,
+                "aghbalyan-criticism": 0.8239,
+                "aram-manukyan-documents": 0.9340,
+                "ase-vol2": 0.9109,
+                "baronian-azgayin-jojer": 0.8880,
+                "baronian-vol10": 0.9373,
+                "dictionary-hy-en": 0.6874,
+                "faustus-1968": 0.8979,
+                "haykakan-tpagrutyun": 0.9269,
+                "kajaznuni-azg-ew-hayrenik": 0.9005,
+                "khatisian-memoirs": 0.7616,
+                "khrimian-works": 0.9576,
+                "medical-encyclopedia": 0.9513,
+                "otyan-works": 0.9504,
+                "toranian-erkirner-ew-marder": 0.9386,
+                "totovents-works": 0.9649,
+                "tumanyan-elzh5": 0.9366,
+            },
+            "mean_over_registers": 0.8919,
+            "baseline_v6_mean": 0.8614,
+            "cyrillic_words_tumanyan": "61 of 81 read (v6: 0 of 81)",
+            "note": (
+                "leads every engine measured (Calfa hye-calfa-n 0.829, Marker "
+                "0.775, Tesseract hye 0.663 over the same seventeen registers; "
+                "hye-paddle on the eight old ones) on fifteen of seventeen by "
+                "word recall; behind hye-paddle on Faustus (0.898 against "
+                "0.922) and Calfa on Abovyan (0.794 against 0.871). See "
+                "known_defects for the five old registers it reads slightly "
+                "worse than v6"
+            ),
+        },
+    },
 }
 
 
@@ -638,7 +852,11 @@ def write_safetensors(stripped: dict, target: Path) -> None:
 
 
 def provenance(
-    bundle: Path, version: str, dataset_revision: str | None, wordlist: Path | None = None
+    bundle: Path,
+    version: str,
+    dataset_revision: str | None,
+    wordlist: Path | None = None,
+    classical_wordlist: Path | None = None,
 ) -> dict:
     commit = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=False
@@ -664,11 +882,19 @@ def provenance(
     # Optional, and carried into the published record when present: a
     # defect found after a version shipped belongs beside its numbers,
     # not only in a commit message nobody downloading weights will read.
-    for key in ("charset", "known_defects", "real_crop_validation", "per_register_evaluation"):
+    for key in (
+        "charset",
+        "known_defects",
+        "real_crop_validation",
+        "per_register_evaluation",
+        "full_pipeline_evaluation",
+    ):
         if key in facts:
             record[key] = facts[key]
     if wordlist is not None:
         record["wordlist"] = wordlist_record(wordlist)
+    if classical_wordlist is not None:
+        record["classical_wordlist"] = wordlist_record(classical_wordlist, CLASSICAL_WORDLIST_NAME)
     return record
 
 
@@ -693,7 +919,18 @@ def main() -> int:
         default=None,
         help=f"word list for tetrak_hy.lexicon, uploaded as {WORDLIST_NAME} (v6 on)",
     )
+    parser.add_argument(
+        "--classical-wordlist",
+        type=Path,
+        default=None,
+        help=(
+            "the classical-orthography word list, uploaded as "
+            f"{CLASSICAL_WORDLIST_NAME} beside the modern one (v7 on)"
+        ),
+    )
     args = parser.parse_args()
+    if args.classical_wordlist is not None and args.wordlist is None:
+        parser.error("--classical-wordlist needs --wordlist: the decoder reads the two as a union")
 
     from huggingface_hub import HfApi, ModelCard
     from huggingface_hub.errors import LocalTokenNotFoundError
@@ -720,7 +957,13 @@ def main() -> int:
     except Exception as error:  # noqa: BLE001 — provenance is best-effort offline
         print(f"Could not resolve the dataset revision ({error}); recording null.")
 
-    record = provenance(args.bundle_dir, args.version_tag, dataset_revision, args.wordlist)
+    record = provenance(
+        args.bundle_dir,
+        args.version_tag,
+        dataset_revision,
+        args.wordlist,
+        args.classical_wordlist,
+    )
 
     with tempfile.TemporaryDirectory() as scratch:
         scratch_dir = Path(scratch)
@@ -742,13 +985,17 @@ def main() -> int:
                 repo_id=args.repo_id,
                 commit_message=f"Add {name} ({args.version_tag})",
             )
-        if args.wordlist is not None:
-            api.upload_file(
-                path_or_fileobj=args.wordlist,
-                path_in_repo=WORDLIST_NAME,
-                repo_id=args.repo_id,
-                commit_message=f"Add {WORDLIST_NAME} ({args.version_tag})",
-            )
+        for wordlist, name in (
+            (args.wordlist, WORDLIST_NAME),
+            (args.classical_wordlist, CLASSICAL_WORDLIST_NAME),
+        ):
+            if wordlist is not None:
+                api.upload_file(
+                    path_or_fileobj=wordlist,
+                    path_in_repo=name,
+                    repo_id=args.repo_id,
+                    commit_message=f"Add {name} ({args.version_tag})",
+                )
         for name in ("model.safetensors", "provenance.json"):
             api.upload_file(
                 path_or_fileobj=scratch_dir / name,
@@ -761,8 +1008,11 @@ def main() -> int:
         )
         api.create_tag(args.repo_id, tag=args.version_tag, repo_type="model", exist_ok=True)
 
-    print(f"Done: https://huggingface.co/{args.repo_id} (private, tagged {args.version_tag} —")
-    print("review, then flip it public in the repo settings or rerun with --make-public).")
+    print(f"Done: https://huggingface.co/{args.repo_id}, tagged {args.version_tag}.")
+    print(
+        "A repository created by this run is private: review it, then rerun with "
+        "--make-public. An existing public repository is live already."
+    )
     return 0
 
 
