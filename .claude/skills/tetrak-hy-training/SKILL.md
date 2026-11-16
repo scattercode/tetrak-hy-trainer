@@ -22,63 +22,6 @@ from the synthetic sampler and from the word list. `harvest_real_crops.py`
 checks the harvest manifest before reading anything. If a guard fires, do not
 work around it.
 
-## Pending for the next run: charsets v4 and v5
-
-Two charset versions are in the code and neither has trained: v4 (`<`, `>`,
-`³`, `±`; `num_class` 175 → 179, with the per-source angle-bracket fold,
-2026-10-04) and v5 (the Armenian apostrophe `՚` and the Russian alphabet
-in both cases including `ё`/`Ё`, 67 classes; `num_class` 179 → 246, brief
-014 Stage 1, 2026-11-09). They ship together with the v7 run. Delete this
-section once that model is released.
-
-- [x] **Cyrillic faces** (step 4, brief 014 issue #40). Done 9 November
-      2026: the twelve GHEA and Arnamu book faces draw the Russian alphabet,
-      the three others do not and the per-line guard keeps them off Cyrillic
-      lines. The lists are under step 4.
-- [x] **Mixed-script tokens** (step 6, issue #43). Done 9 November 2026:
-      the synthetic sampler and the crop harvester both drop a token mixing
-      Cyrillic with Armenian or Latin letters (`charset.mixes_cyrillic`),
-      the harvester with its whole crop. A token that is all Cyrillic is
-      kept, where v5/v6 dropped it; `summary.json` counts both.
-
-- [x] **Refresh every harvest's transcripts first.** Done 9 November 2026:
-      every page of the 58 harvests is at cleaning 3, except two blank
-      Tumanyan vol. 5 pages (5 and 836) whose refresh cleans to nothing and
-      so keeps the old entry; harmless. Harvest text is saved
-      after cleaning, and cleaning 1 folded every printed `<` to `«` for good;
-      a plain re-run resumes past it. Pages now record their `cleaning`, and
-      `python -m tetrak_hy_trainer.harvest --index … --out … --refresh-stale`
-      fetches the stale ones again. Do every directory under `runs/harvest/`,
-      `runs/v0/harvest` and `runs/v1/harvest-*`: the crop harvester refuses
-      stale pages, and the synthetic sampler and word list, which do not,
-      would otherwise never see a printed `<`.
-- [x] **Fresh synthetic pre-train** (step 5), with every harvest passed and
-      the `--classical-share` and `--mixed-share` recorded. Done 13–14
-      November 2026 as `runs/v7-b014` (issue #44; the results paragraph in
-      step 5), then fine-tuned the same day (issue #45; step 7). v6 and
-      every earlier checkpoint has a 175-class head; `finetune_real.py`
-      refuses anything but 246.
-- [x] **Re-harvest every real-crop set** (step 6). Crops harvested under v3
-      carry `«` where the page prints `<`, and relabelling cannot restore it;
-      `finetune_real.py` refuses an unstamped `real_*` folder. Done the
-      night of 9 November 2026 into `runs/v7-b014/all_data`: 217,362 crops
-      from 2,136 pages of 42 sources, the sixteen v6-b013 sources plus 26
-      classical ones (issue #43; the results paragraph in step 6). The
-      Cyrillic crops are still to come: they need a second pass with the v7
-      weights, once v7 can read them.
-- [x] **Rebuild the word list** (step 9). Done 15 November 2026 as two
-      lists under `runs/v7-b014/` (issue #46; the paragraph in step 9).
-- [ ] **Check the confusion table** (step 8) for `<` against `«`, `³`
-      against `²` and `3`, and the Latin/Cyrillic lookalikes (`а/a`, `о/o`,
-      `с/c`, `р/p`, `е/e`, `х/x`) and `Օ/О`, `Ո/П`: a confusion there is a
-      token-script error, not a shape error.
-- [ ] **`VERSIONS` entry** (step 10): record charsets v4 and v5, their
-      additions, and that the `<` fold changed (see `charset.py` and
-      `wikisource.PRINTED_ANGLE_BRACKETS`).
-- [ ] **Library release** (`tetrak-hy-weights-release` in
-      `tetrak-easyocr-armenian`): a new `num_class` is a new yaml, so the
-      packaged yaml and the pins move together.
-
 ---
 
 ## 1. Find material — census
@@ -565,13 +508,16 @@ and +124.
 ## 10. Publish the weights
 
 ```bash
-uv run scripts/upload_model.py --bundle-dir runs/<run>/bundle --version-tag vN \
-    --wordlist runs/<run>/wordlist.tsv.gz --dry-run
+LISTS="--wordlist runs/<run>/wordlist.tsv.gz --classical-wordlist runs/<run>/wordlist-classical.tsv.gz"
+uv run scripts/upload_model.py --bundle-dir runs/<run>/bundle --version-tag vN $LISTS --dry-run
 uv run scripts/upload_model.py --repo-id tetrak/easyocr-armenian-staging \
-    --bundle-dir runs/<run>/bundle --version-tag vN --wordlist runs/<run>/wordlist.tsv.gz
-uv run scripts/upload_model.py --bundle-dir runs/<run>/bundle --version-tag vN \
-    --wordlist runs/<run>/wordlist.tsv.gz              # after review
+    --bundle-dir runs/<run>/bundle --version-tag vN $LISTS
+uv run scripts/upload_model.py --bundle-dir runs/<run>/bundle --version-tag vN $LISTS   # after review
 ```
+
+Both lists go up since v7 (`--classical-wordlist` needs `--wordlist`: the
+decoder reads them as a union), each with its sidecar's attribution in
+`provenance.json`.
 
 Needs `hf auth login` with write access to the `tetrak` org.
 
