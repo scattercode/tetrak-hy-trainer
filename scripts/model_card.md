@@ -29,26 +29,26 @@ model drops into a stock EasyOCR install.
 
 v7 reads both Armenian orthographies and the Russian that Soviet editions quote. It is a pre-train from scratch on every proofread work the trainer harvests from Armenian Wikisource, 58 of them, a third in the classical (pre-1922, diaspora) spelling, fine-tuned on 217,362 real crops cut from 2,136 scanned pages of 42 works. v6 was trained on reformed-orthography print alone and read classical pages a word in four worse than it should.
 
-With the companion package's post-processing (below), v7 leads every Armenian OCR engine we have measured on word recall on fifteen of seventeen registers. Those engines include Calfa's `hye-calfa-n` and `hye-paddle`, which are CC BY-NC. This model is Apache 2.0.
+With the companion package's post-processing (below), v7 leads every Armenian OCR engine we have measured on mean word recall, and leads on eleven of seventeen registers. The other six go to Calfa's `hye-paddle`, five of them classical, and on two, Abovyan and Khatisian, by a distance. Calfa's `hye-calfa-n` and `hye-paddle` are CC BY-NC; this model is Apache 2.0.
 
 | Register (held-out pages) | v7 | v7 + fold + word lists | best other engine |
 |---|---|---|---|
 | Totovents, Works | 0.923 | **0.965** | 0.941 hye-calfa-n |
-| Khrimian, Works (classical) | 0.929 | **0.958** | 0.938 hye-calfa-n |
+| Khrimian, Works (classical) | 0.929 | **0.958** | 0.943 hye-paddle |
 | Medical encyclopedia | 0.904 | **0.951** | 0.933 hye-paddle |
 | Otyan, Works (Western Armenian) | 0.924 | **0.950** | 0.934 hye-paddle |
-| Toranian, *Countries and people* (classical, Aleppo) | 0.932 | **0.939** | 0.901 tesseract-hye |
+| Toranian, *Countries and people* (classical, Aleppo) | 0.932 | **0.939** | 0.909 hye-paddle |
 | Baronian, Works vol. 10 | 0.901 | **0.937** | 0.918 hye-paddle |
 | Tumanyan, academic edition vol. 5 | 0.912 | **0.937** | 0.913 hye-paddle |
-| Aram Manukyan, documents (classical) | 0.873 | **0.934** | 0.924 hye-calfa-n |
-| Teodik, *Armenian printing* (classical) | 0.874 | **0.927** | 0.894 hye-calfa-n |
+| Aram Manukyan, documents (classical) | 0.873 | 0.934 | 0.941 hye-paddle |
+| Teodik, *Armenian printing* (classical) | 0.874 | **0.927** | 0.899 hye-paddle |
 | Armenian Soviet Encyclopedia vol. 2 | 0.846 | **0.911** | 0.865 hye-paddle |
-| Kajaznuni, *Nation and homeland* (classical) | 0.837 | **0.900** | 0.852 hye-calfa-n |
+| Kajaznuni, *Nation and homeland* (classical) | 0.837 | **0.900** | 0.886 hye-paddle |
 | Faustus of Byzantium (1968) | 0.859 | 0.898 | 0.922 hye-paddle |
-| Baronian, *National bigshots* (classical) | 0.829 | **0.888** | 0.853 hye-calfa-n |
-| Aghbalyan, criticism (classical) | 0.788 | **0.824** | 0.801 hye-calfa-n |
-| Abovyan, Works vol. 1 (classical) | 0.765 | 0.794 | 0.871 hye-calfa-n |
-| Khatisian, memoirs (classical) | 0.672 | **0.762** | 0.748 hye-calfa-n |
+| Baronian, *National bigshots* (classical) | 0.829 | 0.888 | 0.894 hye-paddle |
+| Aghbalyan, criticism (classical) | 0.788 | 0.824 | 0.846 hye-paddle |
+| Abovyan, Works vol. 1 (classical) | 0.765 | 0.794 | 0.910 hye-paddle |
+| Khatisian, memoirs (classical) | 0.672 | 0.762 | 0.856 hye-paddle |
 | Armenian–English dictionary | 0.663 | **0.687** | 0.678 marker |
 
 Word recall: the share of the transcript's words found in the output. Ten pages per register (five for the dictionary), never trained on, proofread on Armenian Wikisource; the first column joins lines in detector order, as EasyOCR returns them, and the second is [Tetrak](https://tetrak.dev/)'s pipeline, which orders columns, decodes with the word lists and applies the fold. Mean word recall through the pipeline over the seventeen registers: 0.892, against v6's 0.861 on the same pages and Calfa's 0.829.
