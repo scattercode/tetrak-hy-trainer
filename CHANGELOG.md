@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-11-16
+
+### Changed
+
+- How the full-pipeline gate is measured, and what v7 gave (#83)
+- Publish both word lists with v7 and record its facts (#84)
+
 ## [0.16.0] - 2026-11-15
 
 ### Changed
