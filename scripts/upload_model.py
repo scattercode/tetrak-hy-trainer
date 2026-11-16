@@ -786,13 +786,17 @@ VERSIONS = {
             "baseline_v6_mean": 0.8614,
             "cyrillic_words_tumanyan": "61 of 81 read (v6: 0 of 81)",
             "note": (
-                "leads every engine measured (Calfa hye-calfa-n 0.829, Marker "
-                "0.775, Tesseract hye 0.663 over the same seventeen registers; "
-                "hye-paddle on the eight old ones) on fifteen of seventeen by "
-                "word recall; behind hye-paddle on Faustus (0.898 against "
-                "0.922) and Calfa on Abovyan (0.794 against 0.871). See "
-                "known_defects for the five old registers it reads slightly "
-                "worse than v6"
+                "leads every engine measured on mean word recall (Calfa "
+                "hye-paddle 0.880, hye-calfa-n 0.829, Marker 0.775, Tesseract "
+                "hye 0.663 over the same seventeen registers; hye-paddle run "
+                "on the classical ones 2026-11-16 under paddleocr 3.7) and on "
+                "eleven of seventeen registers. hye-paddle leads the other "
+                "six, five of them classical: Abovyan (0.910 against 0.794), "
+                "Khatisian (0.856 against 0.762), Aghbalyan (0.846 against "
+                "0.824), Faustus (0.922 against 0.898), Aram Manukyan (0.941 "
+                "against 0.934) and Baronian's Azgayin jojer (0.894 against "
+                "0.888). See known_defects for the five old registers it "
+                "reads slightly worse than v6"
             ),
         },
     },
