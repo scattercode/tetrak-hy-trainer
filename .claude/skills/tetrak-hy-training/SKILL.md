@@ -436,8 +436,12 @@ the lessons are about attribution more than recipe:
 - **Count the Russian words again.** The italic crops carry almost none and
   v8 reads 53 of Tumanyan's 81 where v7 and the control read 61. Nothing in
   the register's word recall shows it.
-- **New sources bring their transcribers' habits** (the trap below, again):
-  the three italic books type `...` and v8 writes three dots for `…`.
+- **A side effect is not explained by the first plausible cause.** v8
+  writes three dots for `…` (25 times against v7's once; the control did
+  not). Two of the three italic books' transcripts type the dots, which
+  looked like the trap below, but only four of the 25,542 new labels carry
+  them; the other such lines are not among the crops that survived
+  alignment. Count the labels before blaming them.
 - **Checkpoints are noisy.** Validation accuracy swung by a point between
   checkpoints of one run; do not read a single register's 0.01 as a result.
 
