@@ -413,6 +413,38 @@ trick worth keeping: save each bundle's raw page readings once
 (`evaluate.load_reader` + `read_page` per image) and score folds offline;
 a register run costs half an hour of MPS, a re-score costs seconds.
 
+**A fine-tune from a released model, with a control (brief 023, v8,
+17 November 2026).** v8 is v7 plus 3,000 iterations (2.3 h each run), and
+the lessons are about attribution more than recipe:
+
+- **Run a control.** v7's own recipe for the same iterations, from the same
+  checkpoint, validated on the same crops. On v8 it moved the mean by 0.001
+  and single registers by −0.010 to +0.008: that spread is the noise, and it
+  already explained the encyclopedia's −0.008.
+- **Change one thing.** The first run put italic crops in, a faint synthetic
+  set in, and cut v7's real share from 0.5 to 0.35 and synthetic from 0.3 to
+  0.2. Khatisian gained 0.057 and Kajaznuni and the dictionary each lost
+  0.02, with nothing to say which change cost it. The second run gave a
+  fifth of the real half to the italic crops and moved nothing else
+  (`real_train-real_italic_train-syn_train-syn_caps_train-syn_latin_train`
+  at `0.4-0.1-0.3-0.1-0.1`): fifteen of seventeen registers up, mean 0.895
+  → 0.906, Khatisian 0.762 → 0.838.
+- **A degradation the pipeline already undoes buys little there.** The
+  faint set lifted Abovyan raw (0.765 → 0.836 against the control's 0.797)
+  and by almost nothing through Tetrak, whose faint-page rule stretches the
+  page first. It is for callers without that rule.
+- **Count the Russian words again.** The italic crops carry almost none and
+  v8 reads 53 of Tumanyan's 81 where v7 and the control read 61. Nothing in
+  the register's word recall shows it.
+- **New sources bring their transcribers' habits** (the trap below, again):
+  the three italic books type `...` and v8 writes three dots for `…`.
+- **Checkpoints are noisy.** Validation accuracy swung by a point between
+  checkpoints of one run; do not read a single register's 0.01 as a result.
+
+Scripts and logs: `runs/v7-b023/finetune.sh`, `finetune-italic.sh`; raw
+readings under `runs/v7-b023/readings-registers/`; the pipeline table in
+`runs/eval/registers/b023-v8-full-pipeline.log`.
+
 ## 8. Measure what actually moved
 
 ```bash

@@ -25,39 +25,41 @@ archives. The architecture is EasyOCR's own generation2 recognition
 network (VGG feature extractor, two BiLSTM layers, CTC head), so the
 model drops into a stock EasyOCR install.
 
-## Status: v7, alpha
+## Status: v8, alpha
 
-v7 reads both Armenian orthographies and the Russian that Soviet editions quote. It is a pre-train from scratch on every proofread work the trainer harvests from Armenian Wikisource, 58 of them, a third in the classical (pre-1922, diaspora) spelling, fine-tuned on 217,362 real crops cut from 2,136 scanned pages of 42 works. v6 was trained on reformed-orthography print alone and read classical pages a word in four worse than it should.
+v8 is v7 taught the print v7 read worst: books set in italics. It keeps what v7 brought, both Armenian orthographies and the Russian that Soviet editions quote, from a pre-train on every proofread work the trainer harvests from Armenian Wikisource, 58 of them, a third in the classical (pre-1922, diaspora) spelling. To that it adds 28,331 real crops cut from 616 pages of three italic books, Khatisian's memoirs above all, where v7 had trained on 1,278.
 
-With the companion package's post-processing (below), v7 leads every Armenian OCR engine we have measured on mean word recall, and leads on eleven of seventeen registers. The other six go to Calfa's `hye-paddle`, five of them classical, and on two, Abovyan and Khatisian, by a distance. Calfa's `hye-calfa-n` and `hye-paddle` are CC BY-NC; this model is Apache 2.0.
+With the companion package's post-processing (below), v8 leads every Armenian OCR engine we have measured on mean word recall. It leads on twelve of seventeen registers and is level on one. The other four go to Calfa's `hye-paddle`: Abovyan by a distance, and Khatisian, Aghbalyan and Faustus by about 0.02 or less. Calfa's `hye-calfa-n` and `hye-paddle` are CC BY-NC; this model is Apache 2.0.
 
-| Register (held-out pages) | v7 | v7 + fold + word lists | best other engine |
+| Register (held-out pages) | v8 | v8 + fold + word lists | best other engine |
 |---|---|---|---|
-| Totovents, Works | 0.923 | **0.965** | 0.941 hye-calfa-n |
-| Khrimian, Works (classical) | 0.929 | **0.958** | 0.943 hye-paddle |
-| Medical encyclopedia | 0.904 | **0.951** | 0.933 hye-paddle |
-| Otyan, Works (Western Armenian) | 0.924 | **0.950** | 0.934 hye-paddle |
-| Toranian, *Countries and people* (classical, Aleppo) | 0.932 | **0.939** | 0.909 hye-paddle |
-| Baronian, Works vol. 10 | 0.901 | **0.937** | 0.918 hye-paddle |
-| Tumanyan, academic edition vol. 5 | 0.912 | **0.937** | 0.913 hye-paddle |
-| Aram Manukyan, documents (classical) | 0.873 | 0.934 | 0.941 hye-paddle |
-| Teodik, *Armenian printing* (classical) | 0.874 | **0.927** | 0.899 hye-paddle |
-| Armenian Soviet Encyclopedia vol. 2 | 0.846 | **0.911** | 0.865 hye-paddle |
-| Kajaznuni, *Nation and homeland* (classical) | 0.837 | **0.900** | 0.886 hye-paddle |
-| Faustus of Byzantium (1968) | 0.859 | 0.898 | 0.922 hye-paddle |
-| Baronian, *National bigshots* (classical) | 0.829 | 0.888 | 0.894 hye-paddle |
-| Aghbalyan, criticism (classical) | 0.788 | 0.824 | 0.846 hye-paddle |
-| Abovyan, Works vol. 1 (classical) | 0.765 | 0.794 | 0.910 hye-paddle |
-| Khatisian, memoirs (classical) | 0.672 | 0.762 | 0.856 hye-paddle |
-| Armenian–English dictionary | 0.663 | **0.687** | 0.678 marker |
+| Totovents, Works | 0.929 | **0.969** | 0.941 hye-calfa-n |
+| Medical encyclopedia | 0.917 | **0.960** | 0.933 hye-paddle |
+| Khrimian, Works (classical) | 0.931 | **0.958** | 0.943 hye-paddle |
+| Otyan, Works (Western Armenian) | 0.929 | **0.958** | 0.934 hye-paddle |
+| Baronian, Works vol. 10 | 0.909 | **0.945** | 0.918 hye-paddle |
+| Toranian, *Countries and people* (classical, Aleppo) | 0.938 | **0.943** | 0.909 hye-paddle |
+| Aram Manukyan, documents (classical) | 0.891 | 0.941 | 0.941 hye-paddle |
+| Tumanyan, academic edition vol. 5 | 0.914 | **0.935** | 0.913 hye-paddle |
+| Teodik, *Armenian printing* (classical) | 0.877 | **0.933** | 0.899 hye-paddle |
+| Faustus of Byzantium (1968) | 0.881 | 0.914 | 0.922 hye-paddle |
+| Kajaznuni, *Nation and homeland* (classical) | 0.842 | **0.911** | 0.886 hye-paddle |
+| Armenian Soviet Encyclopedia vol. 2 | 0.842 | **0.909** | 0.865 hye-paddle |
+| Baronian, *National bigshots* (classical) | 0.851 | **0.901** | 0.894 hye-paddle |
+| Abovyan, Works vol. 1 (classical) | 0.834 | 0.856 | 0.910 hye-paddle |
+| Khatisian, memoirs (classical) | 0.772 | 0.838 | 0.856 hye-paddle |
+| Aghbalyan, criticism (classical) | 0.789 | 0.824 | 0.846 hye-paddle |
+| Armenian–English dictionary | 0.691 | **0.708** | 0.678 marker |
 
-Word recall: the share of the transcript's words found in the output. Ten pages per register (five for the dictionary), never trained on, proofread on Armenian Wikisource; the first column joins lines in detector order, as EasyOCR returns them, and the second is [Tetrak](https://tetrak.dev/)'s pipeline, which orders columns, decodes with the word lists and applies the fold. Mean word recall through the pipeline over the seventeen registers: 0.892, against v6's 0.861 on the same pages and Calfa's 0.829.
+Word recall: the share of the transcript's words found in the output. Ten pages per register (five for the dictionary), never trained on, proofread on Armenian Wikisource; the first column joins lines in detector order, as EasyOCR returns them, and the second is [Tetrak](https://tetrak.dev/)'s pipeline, which lifts a faint page, orders columns, decodes with the word lists and applies the fold. Mean word recall through the pipeline over the seventeen registers: 0.906, against v7's 0.895 on the same pages under the same pipeline and 0.880 for `hye-paddle`, the best other engine. (v7 was published at 0.892; the pipeline's faint-page rule has since lifted it.)
 
-**Cyrillic.** The academic edition of Tumanyan quotes Russian in its apparatus. v7 reads 61 of the 81 Russian words on its evaluation pages; v6, with no Cyrillic in its charset, read none.
+**What v8 gains over v7.** Fifteen of the seventeen registers, Khatisian most: 0.762 to 0.838, on every page, with the two confusions its heavy italic caused (`ռ` read as `ո`, `ւ` as `:`) almost gone. A control fine-tune with v7's own recipe for the same iterations moved the mean by 0.001, so the gain is the material and not the extra training.
 
-**Where v7 is worse than v6.** On five of the eight registers v6 was released on it loses a little word recall through the pipeline: Faustus of Byzantium −0.018, the medical encyclopedia −0.016, Otyan −0.014, Baronian vol. 10 −0.007, Totovents −0.003. The same losses appear in the model alone, so they are the recogniser's. They were accepted knowingly for the classical gains above; `v6` stays tagged for a caller who reads reformed print only.
+**Cyrillic.** The academic edition of Tumanyan quotes Russian in its apparatus. v8 reads 53 of the 81 Russian words on its evaluation pages; v7 read 61, and v6, with no Cyrillic in its charset, none. The italic crops carry almost no Russian and the fine-tune cost those eight words.
 
-**Character similarity measures reading order here, not recognition.** In detector order, v7 scores 0.83–0.98 on the single-column registers and 0.30–0.35 on the multi-column encyclopedias, where EasyOCR's output is not in column order. In Tetrak's pipeline the same weights score 0.971 on the encyclopedia and 0.960 on the medical encyclopedia.
+**Where v8 is worse.** Against v7: the Russian above, and the Armenian Soviet Encyclopedia, 0.917 to 0.909, which the control lost equally and so is the price of training on. v8 also writes three full stops where the page prints `…` more often than v7, because the italic books' transcripts type the dots. Against v6, three of the eight registers v6 was released on are still read a little worse through the pipeline (the medical encyclopedia −0.008, Otyan −0.007, Faustus of Byzantium −0.003), where v7 lost on five by up to 0.018. `v6` and `v7` stay tagged.
+
+**Character similarity measures reading order here, not recognition.** In detector order, v8 scores 0.85–0.98 on the single-column registers and 0.30–0.35 on the multi-column encyclopedias, where EasyOCR's output is not in column order. In Tetrak's pipeline the same weights score 0.975 on the encyclopedia and 0.955 on the medical encyclopedia.
 
 > **Use v3 or later.** v0 and v1 carry two defects that v2 fixed: 21% of their training labels were wrapped in quotation marks the images do not show, and their charset has no U+2024 ONE DOT LEADER, so 5.8% of the evaluation words were unwinnable. Both are recorded in those versions' `provenance.json`. Figures for v5 and earlier were measured with a metric that brief 013 corrected and are not comparable with these.
 
@@ -93,9 +95,10 @@ results = [
 
 ### What is still lost, and why
 
-- **Abovyan:** the collected works are set in a face and at a size v7 reads worse than Calfa does; the only classical register still behind.
+- **Abovyan:** the evaluation pages are Grabar verse set in a light italic and photographed faint, some of them out of focus. v8 reads them at 0.856 against `hye-paddle`'s 0.910. A quarter of the words it loses have the right letters and a wrong or missing intonation or punctuation mark.
+- **Khatisian:** a heavy cursive italic from cover to cover. v8 closed most of the gap (0.838 against 0.856) but not all of it.
 - **Faustus of Byzantium:** the index and notes are set in a bold italic whose digits the model confuses.
-- **Mshak (1870s newspaper):** two transcribed pages so far, read at 0.80 word recall against Calfa's 0.90; the first evaluation material not from Wikisource, and too little of it yet to publish a figure.
+- **Mshak (1870s newspaper):** two transcribed pages so far, read at 0.83 word recall against 0.94 for `hye-paddle`; the first evaluation material not from Wikisource, and too little of it yet to publish a figure.
 
 ### Charset
 
@@ -103,7 +106,7 @@ results = [
 
 ### Validation
 
-89.9% word accuracy (0.9864 normalised edit distance) on 21,574 real crops from pages held out of the fine-tune, split by page, over all 42 sources. Lower than v6's 95.2% because the held-out set is twice the size and a third of it is classical print in diaspora faces. Held-out crop accuracy is a poor proxy for page-level recall; the page figures above are the ones to trust.
+88.7% word accuracy (0.9729 normalised edit distance) on 23,722 real crops from pages held out of the fine-tune, split by page. Not comparable with v7's 89.9%: the held-out set gained 2,789 crops from the italic books, the hardest print in it. Held-out crop accuracy is a poor proxy for page-level recall, and swings by a point between checkpoints of one run; the page figures above are the ones to trust.
 
 ## Files
 
@@ -128,7 +131,7 @@ for custom models:
 from huggingface_hub import hf_hub_download
 
 for filename in ("tetrak_hy.pth", "tetrak_hy.py", "tetrak_hy.yaml"):
-    hf_hub_download("tetrak/easyocr-armenian", filename, revision="v7")
+    hf_hub_download("tetrak/easyocr-armenian", filename, revision="v8")
 ```
 
 - `tetrak_hy.yaml` and `tetrak_hy.py` go in the user network
@@ -158,7 +161,9 @@ from.
 
 v7's pre-train rendered 175,500 synthetic line crops in 15 Armenian faces from 60,000 lines sampled over every proofread page of 58 works on Armenian Wikisource (CC BY-SA), 33 of them in classical orthography: a quarter of the lines are classical, and one in twenty mixes Armenian with Russian. Twelve of the faces draw Cyrillic; the three that do not are kept off lines with a Russian word.
 
-The fine-tune mixes, in every batch, real crops (217,362, of which 21,574 held out by page; cut from 2,136 scanned pages of 42 works by detection-assisted alignment against their transcripts), the pre-train's synthetic crops, all-caps lines for encyclopedia headwords, and English lines rendered from six public-domain novels so that the Latin the bilingual dictionary prints is not read as Cyrillic.
+v7's fine-tune mixes, in every batch, real crops (217,362, of which 21,574 held out by page; cut from 2,136 scanned pages of 42 works by detection-assisted alignment against their transcripts), the pre-train's synthetic crops, all-caps lines for encyclopedia headwords, and English lines rendered from six public-domain novels so that the Latin the bilingual dictionary prints is not read as Cyrillic.
+
+v8 is v7's released weights fine-tuned for a further 3,000 iterations on the same mix, with a fifth of the real half given to new crops from three books set in italics: 28,331 (2,789 held out by page), cut with v7 from 616 scanned pages of Khatisian's memoirs, Abovyan's collected works vol. 1 and *The First Love*. v7 could align far more of those pages to their transcripts than v6 could, which is where the crops came from. The synthetic sets and both word lists are v7's, unchanged.
 
 Every evaluation page, and every page that prints an evaluation page's text, is excluded from all of it and from both word lists. The real crops are not published; they are reproducible from the transcripts with the trainer's harvester. `provenance.json` records the recipe, the sources, the charset and the checksums. No font file is redistributed.
 

@@ -182,6 +182,35 @@ OLD_REGISTER_LOSSES = (
     "read at all. v6 stays tagged for a caller reading reformed print only."
 )
 
+V8_CYRILLIC_LOSS = (
+    "v8 reads fewer of the Russian words in Tumanyan's apparatus than v7: 53 "
+    "of the 81 on the evaluation pages against v7's 61, through Tetrak's "
+    "pipeline on 2026-11-17. A control fine-tune with v7's own recipe for the "
+    "same iterations kept 61, so the loss came with the italic crops, which "
+    "carry almost no Cyrillic. Word recall on the register as a whole moved "
+    "by -0.002. v7 stays tagged for a caller to whom the Russian matters more "
+    "than the classical italics."
+)
+V8_THREE_DOTS = (
+    "v8 writes three full stops where the page prints the ellipsis character "
+    "more often than v7 does (25 times against once over the seventeen "
+    "registers, with 23 ellipsis characters against v7's 60). The three "
+    "italic books' transcripts type the dots, and the fine-tune learnt the "
+    "transcribers' convention with the letterforms. Otyan's works, which "
+    "print many ellipses, still gained word recall. To be folded at harvest "
+    "before the next run."
+)
+V8_REGISTER_LOSSES = (
+    "Against v7 through Tetrak's pipeline (2026-11-17), v8 reads the Armenian "
+    "Soviet Encyclopedia slightly worse (word recall 0.917 to 0.909, nine "
+    "pages of ten). The control fine-tune lost the same 0.008 on the same "
+    "pages, so it is the cost of 3,000 more iterations on this recipe, not "
+    "of the italic crops. Against v6, three of the eight registers v6 was "
+    "released on are still read a little worse: the medical encyclopedia "
+    "-0.008, Otyan -0.007 and Faustus of Byzantium -0.003, where v7 lost on "
+    "five by up to 0.018. v6's figures are those measured on 2026-11-16, "
+    "before Tetrak's faint-page rule, which v6 has not been re-read under."
+)
 MISSING_ABBREVIATION_DOT = (
     "U+2024 ONE DOT LEADER, which the source transcripts use as the "
     "abbreviation dot, was absent from the charset, so the training pipeline "
@@ -799,6 +828,169 @@ VERSIONS = {
                 "reads slightly worse than v6"
             ),
         },
+    },
+}
+
+# runs/v7-b023-italic/ -- brief 023: v7 fine-tuned a further 3,000 iterations
+# with crops from the three books set in italics, which v7 read worst.
+# Defined after the table because it shares v7's charset, faces and
+# pre-train, and repeating them would let the two drift.
+VERSIONS["v8"] = {
+    "recipe": (
+        "scripts/finetune_real.py --iters 3000 from v7's released checkpoint, "
+        "batches mixing v7's real crops 0.4, new crops from three italic "
+        "books 0.1, v7's synthetic set 0.3, all-caps lines 0.1 and English "
+        "lines 0.1 (v7's recipe with a fifth of the real half given to the "
+        "italic crops); checkpoint chosen on held-out real crops (iteration "
+        "2,500). A control with v7's own recipe for the same iterations "
+        "separates the material from the extra training "
+        "(runs/v7-b023/finetune.sh, finetune-italic.sh)"
+    ),
+    "dataset_config": None,
+    "dataset_note": (
+        "v7's real crops (195,582 in training, after 206 moved out with the "
+        "pages the new pass holds for validation) and 28,331 more cut with "
+        "v7 from 616 scanned pages of the three works it read worst, all "
+        "set in italics: Khatisian's memoirs (13,927 crops from 391 pages, "
+        "where v7 had trained on 1,278), Abovyan's collected works vol. 1 "
+        "(12,365 from 146) and The First Love (2,039 from 79). 25,542 of "
+        "them train and 2,789 validate, split by page; validation is 23,722 "
+        "crops in all. v6 aligned 0.29 of Khatisian's boxes to the "
+        "transcript on the scans v7 trained from; v7 aligns 0.43 over "
+        "every proofread page. Every evaluation page, and every page printing one's text "
+        "(tetrak_hy_trainer.heldout), is excluded as before; the synthetic "
+        "sets and both word lists are v7's, unchanged"
+    ),
+    "charset": {
+        **VERSIONS["v7"]["charset"],
+        "added": [],
+        "note": (
+            "unchanged from v7: 245 characters plus the CTC blank. The yaml "
+            "is identical, so v8's weights load wherever v7's do"
+        ),
+    },
+    "known_defects": [V8_CYRILLIC_LOSS, V8_THREE_DOTS, V8_REGISTER_LOSSES],
+    "fonts": VERSIONS["v7"]["fonts"],
+    "synthetic_validation": {
+        **VERSIONS["v7"]["synthetic_validation"],
+        "note": (
+            "v7's pre-train, which v8 inherits through v7's released "
+            "weights; v8 rendered no synthetic set of its own"
+        ),
+    },
+    "real_crop_validation": {
+        "word_accuracy": 88.745,
+        "norm_edit_distance": 0.9729,
+        "note": (
+            "23,722 crops from pages held out of the fine-tune, at the "
+            "chosen checkpoint (iteration 2,500). Not comparable with v7's "
+            "89.9: the set gained 2,789 crops from the italic books, the "
+            "hardest print in it. Accuracy on it swings by a point between "
+            "checkpoints of one run"
+        ),
+    },
+    "real_scan_evaluation": {
+        "char_similarity": 0.3491,
+        "word_recall": 0.8418,
+        "pages": 10,
+        "source": REAL_EVAL_SOURCE,
+        "metric": REAL_EVAL_METRIC_V7,
+        "baselines": {
+            "tetrak-hy-v7": {"char_similarity": 0.3493, "word_recall": 0.8457},
+            "hye-calfa-n": {"char_similarity": 0.9600, "word_recall": 0.8426},
+            "hye-paddle": {"char_similarity": 0.3342, "word_recall": 0.8648},
+            "marker": {"char_similarity": 0.5262, "word_recall": 0.8358},
+            "tesseract-hye": {"char_similarity": 0.9456, "word_recall": 0.7728},
+        },
+        "note": (
+            "the model alone, joined in detector order: char_similarity "
+            "here measures reading order on three-column pages, not "
+            "recognition. Tetrak's pipeline (faint-page rule, layout, both "
+            "word lists, fold) scores 0.975 / 0.909 on the same pages. This "
+            "is the one register v8 reads worse than v7; see known_defects"
+        ),
+    },
+    "per_register_evaluation": {
+        "metric": "mean word recall, model alone (no fold, no layout)",
+        "source": (
+            "runs/eval/<work>/ built by scripts/build_eval_sets.py; "
+            "scored by scripts/evaluate_registers.py "
+            "(runs/eval/registers/b023-v7-b023-italic-raw.log)"
+        ),
+        "registers": {
+            "abovyan-vol1": 0.8340,
+            "aghbalyan-criticism": 0.7892,
+            "aram-manukyan-documents": 0.8910,
+            "ase-vol2": 0.8418,
+            "baronian-azgayin-jojer": 0.8506,
+            "baronian-vol10": 0.9091,
+            "dictionary-hy-en": 0.6909,
+            "faustus-1968": 0.8810,
+            "haykakan-tpagrutyun": 0.8766,
+            "kajaznuni-azg-ew-hayrenik": 0.8419,
+            "khatisian-memoirs": 0.7725,
+            "khrimian-works": 0.9306,
+            "medical-encyclopedia": 0.9169,
+            "mshak": 0.7923,
+            "otyan-works": 0.9290,
+            "toranian-erkirner-ew-marder": 0.9384,
+            "totovents-works": 0.9294,
+            "tumanyan-elzh5": 0.9137,
+        },
+        "mean_over_registers": 0.8627,
+        "baseline_v7_mean": 0.8428,
+        "control_mean": 0.8506,
+        "note": (
+            "the same eighteen registers and pages as v7. The control is "
+            "v7's own recipe for the same 3,000 iterations"
+        ),
+    },
+    "full_pipeline_evaluation": {
+        "metric": (
+            "mean word recall through Tetrak's pipeline: faint-page rule, "
+            "layout, both word lists, fold with page context"
+        ),
+        "source": (
+            "tetrak/tools/register_comparison.py over the trainer's "
+            "runs/eval/<work>/, Tetrak 5.28.0, 2026-11-17 "
+            "(runs/eval/registers/b023-v8-full-pipeline.log)"
+        ),
+        "registers": {
+            "abovyan-vol1": 0.8558,
+            "aghbalyan-criticism": 0.8242,
+            "aram-manukyan-documents": 0.9413,
+            "ase-vol2": 0.9095,
+            "baronian-azgayin-jojer": 0.9008,
+            "baronian-vol10": 0.9450,
+            "dictionary-hy-en": 0.7078,
+            "faustus-1968": 0.9137,
+            "haykakan-tpagrutyun": 0.9327,
+            "kajaznuni-azg-ew-hayrenik": 0.9109,
+            "khatisian-memoirs": 0.8383,
+            "khrimian-works": 0.9581,
+            "medical-encyclopedia": 0.9602,
+            "otyan-works": 0.9575,
+            "toranian-erkirner-ew-marder": 0.9432,
+            "totovents-works": 0.9687,
+            "tumanyan-elzh5": 0.9346,
+        },
+        "mean_over_registers": 0.9060,
+        "baseline_v7_mean": 0.8949,
+        "control_mean": 0.8963,
+        "cyrillic_words_tumanyan": "53 of 81 read (v7: 61 of 81)",
+        "note": (
+            "v7 re-read the same day under the same pipeline, whose "
+            "faint-page rule (Tetrak 5.28.0) lifted v7 itself from the 0.892 "
+            "published with it. Fifteen of seventeen registers gain, "
+            "Khatisian most (0.762 to 0.838, every page). v8 leads every "
+            "engine measured on mean word recall (Calfa hye-paddle 0.880, "
+            "hye-calfa-n 0.829, Marker 0.775, Tesseract hye 0.663) and on "
+            "twelve registers, and is level with hye-paddle on Aram "
+            "Manukyan (0.941 each). hye-paddle leads the other four: "
+            "Abovyan (0.910 against 0.856), Khatisian (0.856 against "
+            "0.838), Aghbalyan (0.846 against 0.824) and Faustus (0.922 "
+            "against 0.914)"
+        ),
     },
 }
 
