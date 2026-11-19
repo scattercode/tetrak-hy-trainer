@@ -64,3 +64,19 @@ class TestUsableUnderV5:
     def test_a_greek_stray_is_still_refused(self, script) -> None:
         allowed = set(charset.character_list())
         assert not script.usable(crop("π-greek"), allowed, 60, 40.0)
+
+
+def test_reading_of_takes_the_page_column_by_column(script):
+    # The transcript screen compares the page as read with the transcript,
+    # so the reading has to come in the transcript's order: down the left
+    # column, then down the right.
+    def box(text, x, y):
+        return script.Detection(text=text, bbox=(x, y, x + 300, y + 30), confidence=0.9)
+
+    detections = [
+        box("աջ վերև", 600, 100),
+        box("ձախ ներքև", 100, 200),
+        box("ձախ վերև", 100, 100),
+        box("աջ ներքև", 600, 200),
+    ]
+    assert script.reading_of(detections) == "ձախ վերև ձախ ներքև աջ վերև աջ ներքև"
