@@ -277,7 +277,7 @@ because the non-commercial models may not touch training material.
 What it was measured against, 19 November 2026
 (`scripts/calibrate_transcript_screen.py`, readings kept in
 `runs/transcript-screen/`): the words where our reader and a third engine
-agree against the transcript, the test Stephen checked by hand on page 232
+agree against the transcript, the test checked by hand against the scan on page 232
 (seventeen of seventeen were transcript errors). Over 167 evaluation pages
 the two correlate 0.74. At 1.5 the screen leaves out 16 pages: 14 of the
 32 worst, 1 of the 85 cleanest. Page 232 scored 3.7 as it stood and 0.0
