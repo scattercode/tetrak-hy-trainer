@@ -79,6 +79,21 @@ batch -- the vendored trainer takes a single dataset root.
 Read the model bundle you pass carefully: it decides which words align.
 A better recogniser matches more of the transcript, so harvest with the
 newest weights even though the fine-tune starts from them too.
+
+**Pass ``--screen-wordlist`` on every harvest** (brief 023). A page marked
+proofread on Wikisource may be the scanned file's OCR layer, lightly
+tidied and never read against the scan, and a crop only teaches when the
+reader disagreed with the transcript: the words such a page gets wrong.
+With the word lists given, each page is checked before any crop is cut
+(:mod:`tetrak_hy_trainer.transcript_check`): where our reading differs
+from the transcript and stock Tesseract read the same word we did, the
+word is suspect unless the word list knows the transcript's word and not
+ours, and a page with too many gives no crops at all. The pages left out are listed in ``summary.json`` with the
+words that condemned them, so a source losing many pages is seen. This
+needs the ``tesseract`` command with its stock ``hye`` model::
+
+    ... --screen-wordlist runs/v7-b014/wordlist.tsv.gz \\
+        --screen-wordlist runs/v7-b014/wordlist-classical.tsv.gz
 """
 
 from __future__ import annotations
@@ -95,7 +110,14 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
-from tetrak_hy_trainer import align, charset, heldout, synth, wikisource  # noqa: E402
+from tetrak_hy_trainer import (  # noqa: E402
+    align,
+    charset,
+    heldout,
+    synth,
+    transcript_check,
+    wikisource,
+)
 from tetrak_hy_trainer.align import Detection, Tier  # noqa: E402
 
 # Boxes shorter than this are detector noise -- rules, speckle, the edge of
@@ -257,6 +279,11 @@ def detect_page(reader, image_path: Path) -> list[Detection]:
     return detections
 
 
+def reading_of(detections: list[Detection]) -> str:
+    """The page as the recogniser read it, in reading order, for the transcript screen."""
+    return " ".join(detection.text for detection in align.column_order(detections))
+
+
 def is_line_break_fragment(crop: align.AlignedCrop) -> bool:
     """Whether the crop's last word is half of a word broken across lines.
 
@@ -372,7 +399,41 @@ def main() -> int:
     parser.add_argument("--margin-fraction", type=float, default=0.1)
     parser.add_argument("--max-label-length", type=int, default=DEFAULT_MAX_LABEL_LENGTH)
     parser.add_argument("--gpu", action="store_true", help="let EasyOCR use a GPU")
+    parser.add_argument(
+        "--screen-wordlist",
+        type=Path,
+        action="append",
+        default=None,
+        help=(
+            "a word<TAB>count list (repeatable). Turns on the transcript screen: a page "
+            "whose transcript has too many words that our reading and stock Tesseract "
+            "both dispute gives no crops; these counts veto a confusion the two readers "
+            "share (see transcript_check)"
+        ),
+    )
+    parser.add_argument(
+        "--screen-limit",
+        type=float,
+        default=transcript_check.DEFAULT_MAX_SUSPECTS_PER_HUNDRED,
+        help="suspect words per hundred at which a page is left out",
+    )
     args = parser.parse_args()
+
+    frequency = None
+    if args.screen_wordlist:
+        if not transcript_check.tesseract_available():
+            raise SystemExit(
+                "--screen-wordlist needs the tesseract command (with its stock hye model) "
+                "as the second reader. Install it, or harvest without the screen and say so."
+            )
+        frequency = transcript_check.load_frequency(args.screen_wordlist)
+        print(f"transcript screen on: {len(frequency)} words counted", flush=True)
+    else:
+        print(
+            "transcript screen OFF: pages are trusted on their proofread status alone. "
+            "Pass --screen-wordlist.",
+            flush=True,
+        )
 
     tiers = {Tier(name.strip()) for name in args.tiers.split(",") if name.strip()}
     allowed = set(charset.character_list())
@@ -407,7 +468,8 @@ def main() -> int:
     cyrillic_kept = 0
     mixed_dropped = 0
     per_source: dict[str, dict[str, int]] = {}
-    page_stats: dict[str, dict[str, int]] = {}
+    page_stats: dict[str, dict[str, int | float]] = {}
+    screened: list[dict] = []
     started = time.time()
 
     for position, page in enumerate(pages):
@@ -416,11 +478,40 @@ def main() -> int:
         truth = wikisource.normalise_transcript(
             page["text_path"].read_text(encoding="utf-8"), page["index"]
         )
-        crops = align.align_page(
-            detections,
-            truth,
-            min_similarity=args.min_similarity,
-            bracket_span=args.bracket_span,
+        page_key = f"{page['source']}/{page['page_number']}"
+        check = None
+        if frequency is not None:
+            check = transcript_check.check_page(
+                truth,
+                reading_of(detections),
+                transcript_check.tesseract_words(page["image_path"]),
+                frequency,
+            )
+        unchecked = check is not None and check.unchecked(args.screen_limit)
+        if unchecked:
+            # The whole page, not the suspect words: a page nobody read
+            # against the scan is wrong in places no screen can see.
+            screened.append(
+                {
+                    "page": page_key,
+                    "quality": page.get("quality"),
+                    "words": check.words,
+                    "suspects": len(check.suspects),
+                    "per_hundred": round(check.per_hundred, 2),
+                    "examples": [
+                        f"{suspect.transcript} / {suspect.reader}" for suspect in check.suspects[:8]
+                    ],
+                }
+            )
+        crops = (
+            []
+            if unchecked
+            else align.align_page(
+                detections,
+                truth,
+                min_similarity=args.min_similarity,
+                bracket_span=args.bracket_span,
+            )
         )
 
         # The blob test is relative to this page: scans vary in resolution
@@ -467,22 +558,42 @@ def main() -> int:
         cyrillic_kept += page_cyrillic
         mixed_dropped += page_mixed
         column_count = len(align.columns(detections))
-        page_stats[f"{page['source']}/{page['page_number']}"] = {
+        page_stats[page_key] = {
             "boxes": len(detections),
             "crops": kept,
             "columns": column_count,
             "cyrillic": page_cyrillic,
             "mixed_dropped": page_mixed,
         }
+        if check is not None:
+            page_stats[page_key]["suspects_per_hundred"] = round(check.per_hundred, 2)
         source = per_source.setdefault(
             page["source"],
-            {"pages": 0, "boxes": 0, "crops": 0, "cyrillic": 0, "mixed_dropped": 0},
+            {
+                "pages": 0,
+                "boxes": 0,
+                "crops": 0,
+                "cyrillic": 0,
+                "mixed_dropped": 0,
+                "screened": 0,
+            },
         )
         source["pages"] += 1
+        source["screened"] += unchecked
         source["boxes"] += len(detections)
         source["crops"] += kept
         source["cyrillic"] += page_cyrillic
         source["mixed_dropped"] += page_mixed
+
+        if unchecked:
+            print(
+                f"  {page['source']} p{page['page_number']} [{split}] LEFT OUT: "
+                f"{len(check.suspects)} suspect words in {check.words} "
+                f"({check.per_hundred:.1f} per hundred), e.g. "
+                + ", ".join(f"{s.transcript}/{s.reader}" for s in check.suspects[:4]),
+                flush=True,
+            )
+            continue
 
         counts = align.tier_counts(crops)
         print(
@@ -535,6 +646,13 @@ def main() -> int:
             "max_label_length": args.max_label_length,
             "val_every": args.val_every,
         },
+        "transcript_screen": {
+            "on": frequency is not None,
+            "wordlists": [str(path) for path in args.screen_wordlist or []],
+            "limit_per_hundred": args.screen_limit,
+            "second_reader": "tesseract hye" if frequency is not None else None,
+            "pages_left_out": screened,
+        },
         "counts": {
             "train": len(rows["train"]),
             "val": len(rows["val"]),
@@ -566,7 +684,8 @@ def main() -> int:
         print(
             f"  {name}: {stats['pages']} pages, {stats['boxes']} boxes, "
             f"{stats['crops']} crops ({share:.2f}), cyrillic {stats['cyrillic']}, "
-            f"mixed dropped {stats['mixed_dropped']}",
+            f"mixed dropped {stats['mixed_dropped']}, "
+            f"left out by the transcript screen {stats['screened']}",
             flush=True,
         )
     return 0 if total else 1
