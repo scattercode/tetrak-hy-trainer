@@ -75,6 +75,24 @@ engine's mistakes.
   (2026-10-08) the template stripper took the whole page with the wrapper and
   every poetry index harvested as empty, silently. Harvests taken before then
   have no verse: `--refresh-stale` refetches those pages.
+- **Formatting templates carry print.** Until cleaning 4 (2026-11-19) every
+  template was stripped whole, and a centred heading, a signature set to the
+  right, a spaced-out name, a drop capital and, in the encyclopedia, many
+  headwords and every bibliography's authors went with their wrappers: 1,382
+  words on 480 sampled pages, 98 of the Aram Manukyan evaluation set's
+  (brief 023). `_TEXT_TEMPLATES` in `wikisource.py` lists the ten that are
+  kept, each seen carrying print; add a new one there with a test, and say
+  whether it sets its text on a line of its own. **Every harvest taken
+  before then is stale**: run `--refresh-stale` on each directory before the
+  next crop harvest, which refuses stale pages. To find such templates in a
+  new source, read a few pages' raw wikitext (`action=raw`) beside the
+  cleaned text.
+- **A critical edition's angle brackets are print.** `PRINTED_ANGLE_BRACKETS`
+  lists the sources whose `<…>` are the editor's own (a supplied ending, an
+  expanded abbreviation) and must not be folded to guillemets. Abovyan's
+  four volumes joined at cleaning 4; the edition states the convention in
+  its editorial principles (volume 2, page 7). Check a new critical edition
+  against a scan before harvesting it, because the fold cannot be undone.
 - **`--image-width 3840`** matches the evaluation scans, so crops carry the
   same detail per character as the material the model is scored on.
 - Re-runs are incremental. Adding `--images` to a harvest taken text-only tops

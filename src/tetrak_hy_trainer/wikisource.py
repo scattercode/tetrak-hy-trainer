@@ -211,8 +211,71 @@ _TEMPLATE = re.compile(r"\{\{[^{}]*\}\}")
 # wrapper, and every poetry index harvested as empty: Varoujan, Terian,
 # Charents vols. 2-3, Tsaturyan, Toranian's verse. Keep the poem's text.
 _POEM_TEMPLATE = re.compile(r"\{\{[^{}<]*<poem>(.*?)</poem>[^{}]*\}\}", re.DOTALL)
+# Templates that only format text the page prints. Everything else is
+# stripped whole, which is right for a line number or a rule and wrong for
+# these: until cleaning 4 a centred heading, a signature set to the right,
+# a spaced-out name and a drop capital all went with their wrapper. On the
+# evaluation pages that was 181 Armenian words, 98 of them in the Aram
+# Manukyan documents, where every heading is centred (brief 023). Found by
+# tallying the templates on 480 pages across every harvest; a template is
+# listed only once it has been seen carrying print.
+#   Կենտրոն, կ, ct   centred text
+#   Աջաթև            text set to the right: signatures, datelines
+#   լայն             letter-spaced text
+#   x-larger, xx-larger   a larger size: headings and drop capitals
+#   ՀՍՀ հեղ          the author's signature under an encyclopedia entry
+#   գբս, գբվ         a word broken across two pages: the first argument is
+#                    the part this page prints, the second the whole word
+# Names are matched without regard to case, as MediaWiki matches the first
+# letter. The printed text is always the first unnamed argument.
+#
+# The first five set their text on a line of its own, whatever the
+# wikitext does: transcribers write "մեջ։{{ՀՍՀ հեղ|Վ. Մաղալյան}}" and
+# "{{Աջաթև|14 Սեպտեմբեր}}Երէկ գիշեր" with nothing between, and unwrapped
+# in place those would weld two words into one. The others run on in the
+# line: a drop capital is the first letter of its word.
+_BLOCK_TEXT_TEMPLATES = frozenset({"կենտրոն", "կ", "ct", "աջաթև", "հսհ հեղ"})
+_INLINE_TEXT_TEMPLATES = frozenset({"լայն", "x-larger", "xx-larger", "գբս", "գբվ"})
+_TEXT_TEMPLATES = _BLOCK_TEXT_TEMPLATES | _INLINE_TEXT_TEMPLATES
+# Stands for the line break around a block template's text until every
+# template is unwrapped; never occurs in wikitext.
+_LINE_EDGE = "\x00"
+_LINE_EDGES = re.compile(rf"\n?(?:[ \t]*{_LINE_EDGE}[ \t]*)+\n?")
+_NAMED_ARGUMENT = re.compile(r"\s*[\w-]+\s*=")
 _WIKILINK = re.compile(r"\[\[(?:[^|\]]*\|)?([^\]]*)\]\]")
 _EMPHASIS = re.compile(r"'{2,}")
+
+
+def _template_arguments(body: str) -> list[str]:
+    """Split a template's body on the pipes that separate its arguments.
+
+    A pipe inside a ``[[link|label]]`` belongs to the link.
+    """
+    arguments, depth, start = [], 0, 0
+    for position, character in enumerate(body):
+        if body.startswith("[[", position):
+            depth += 1
+        elif body.startswith("]]", position):
+            depth = max(depth - 1, 0)
+        elif character == "|" and depth == 0:
+            arguments.append(body[start:position])
+            start = position + 1
+    arguments.append(body[start:])
+    return arguments
+
+
+def _printed_text(match: re.Match[str]) -> str:
+    """What an innermost template leaves behind: its text, or nothing."""
+    name, *arguments = _template_arguments(match.group()[2:-2])
+    name = name.strip().lower()
+    if name not in _TEXT_TEMPLATES:
+        return ""
+    for argument in arguments:
+        if not _NAMED_ARGUMENT.match(argument):
+            if name in _BLOCK_TEXT_TEMPLATES and argument.strip():
+                return f"{_LINE_EDGE}{argument}{_LINE_EDGE}"
+            return argument
+    return ""
 
 
 def clean_wikitext(text: str, index_title: str = "") -> str:
@@ -220,7 +283,9 @@ def clean_wikitext(text: str, index_title: str = "") -> str:
 
     Strips the ProofreadPage ``<noinclude>`` header/footer (quality tag and
     running header), ``<section>`` transclusion markers, references,
-    templates, HTML tags and wiki markup, keeping link display text. The
+    templates, HTML tags and wiki markup, keeping link display text and
+    the text inside the templates that only format it (centred, set right,
+    spaced, enlarged: ``_TEXT_TEMPLATES``). The
     result is the page's prose — suitable as corpus text for synthesis and
     as the transcript side of a page/scan pair.
 
@@ -236,7 +301,8 @@ def clean_wikitext(text: str, index_title: str = "") -> str:
     text = _REF.sub("", text)
     text = _POEM_TEMPLATE.sub(r"\1", text)
     while _TEMPLATE.search(text):
-        text = _TEMPLATE.sub("", text)
+        text = _TEMPLATE.sub(_printed_text, text)
+    text = _LINE_EDGES.sub("\n", text)
     text = _WIKILINK.sub(r"\1", text)
     text = _HTML_TAG.sub("", text)
     text = _EMPHASIS.sub("", text)
@@ -369,11 +435,28 @@ _ANGLE_BRACKET = re.compile(
 # guillemet, and folding would teach the model the wrong shape for 787
 # printed brackets. Each checked against its scans: Tumanyan pages 522,
 # 552, 630 and 637; Baronian page 694.
+#
+# Abovyan's complete works joined in brief 023. The edition says so itself:
+# rule 9 of its editorial principles (volume 2, page 7) puts in angle
+# brackets the completed part of a word the author left short, the
+# editors' other additions and notes on illegible words. Volume 1 page 45
+# prints a refrain's supplied endings that way ("սիրե <լւոյ>"), volume 6
+# page 123 an expanded abbreviation ("գերմ<անացւոց>"), and all four
+# volumes type their quotations as « ». Folded, page 45 read
+# "սիրե«լւոյ»" and, where the regex judged one bracket print and its
+# partner not, "գե<րիս քոյ»".
 PRINTED_ANGLE_BRACKETS = frozenset(
     {
         "Ինդեքս:Թումանյանի ԵԼԺ հ5.djvu",
         "Ինդեքս:Hagop Baronian, Collected works, vol. 10 "
         "(Հակոբ Պարոնյան, Երկերի ժողովածու, հատոր 10-րդ).djvu",
+        "Ինդեքս:Խաչատուր Աբովյան, Երկերի լիակատար ժողովածու, հատոր 1 "
+        "(Khachatur Abovyan, Collective works, volume 1).djvu",
+        "Ինդեքս:Խաչատուր Աբովյան, Երկերի լիակատար ժողովածու, հատոր 2 "
+        "(Khachatur Abovyan, Collective works, volume 2).djvu",
+        "Ինդեքս:Խաչատուր Աբովյան, Երկերի լիակատար ժողովածու, հատոր 3 "
+        "(Khachatur Abovyan, Collective works, volume 3).djvu",
+        "Ինդեքս:Խաչատուր Աբովյան, Երկեր, հատոր 6.djvu",
     }
 )
 
@@ -389,7 +472,11 @@ PRINTED_ANGLE_BRACKETS = frozenset(
 #   3  verse inside a {{Poemx|<poem>…</poem>}} wrapper is kept (brief 014).
 #      Cleaning 1 and 2 stripped it with the template, so a poetry page
 #      saved earlier is empty or missing its verse.
-TRANSCRIPT_CLEANING = 3
+#   4  text inside the formatting templates is kept (_TEXT_TEMPLATES), and
+#      Abovyan's four volumes keep their printed angle brackets (brief
+#      023). Cleaning 3 dropped every centred heading and folded those
+#      brackets to guillemets, neither of which can be put back.
+TRANSCRIPT_CLEANING = 4
 
 
 def cleaning_of(entry: dict) -> int:

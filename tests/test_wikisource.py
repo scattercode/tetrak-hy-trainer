@@ -66,6 +66,66 @@ class TestCleanWikitext:
             "Որ ոտքի միակ ոստումով",
         ]
 
+    def test_keeps_the_text_inside_formatting_templates(self) -> None:
+        # Abovyan volume 1, page 271: the heading is centred and bold, and
+        # until cleaning 4 it left with its template.
+        page = (
+            "{{poemx||<poem>{{Կենտրոն|'''ՍՈՒԳ ԱՐԱՐԵԱԼ Ի ՄԵԾԱՆՈՒՆ\n"
+            "ՄԱՀՈՒԱՆ ՍԻՐՈՒՀԻՈՅ ՄԱՐԻԱՆԷԻ։'''}}\n"
+            "{{Տող|1}}Առի՞ց սկիզբն կոծել զմահ քո դառնագին,</poem>}}"
+        )
+        assert clean_wikitext(page).splitlines() == [
+            "ՍՈՒԳ ԱՐԱՐԵԱԼ Ի ՄԵԾԱՆՈՒՆ",
+            "ՄԱՀՈՒԱՆ ՍԻՐՈՒՀԻՈՅ ՄԱՐԻԱՆԷԻ։",
+            "Առի՞ց սկիզբն կոծել զմահ քո դառնագին,",
+        ]
+
+    def test_formatting_templates_of_every_kind_keep_their_text(self) -> None:
+        assert clean_wikitext("{{Աջաթև|Արճակի գաւառապետ՝ Շիրին}}") == "Արճակի գաւառապետ՝ Շիրին"
+        assert clean_wikitext("{{լայն|Նադիրով}} եկաւ") == "Նադիրով եկաւ"
+        assert clean_wikitext("{{Լայն|Փավստոս Բուզանդ}}") == "Փավստոս Բուզանդ"
+        # A drop capital belongs to its word.
+        assert clean_wikitext("{{x-larger|Չ}}որս տարերք") == "Չորս տարերք"
+        assert clean_wikitext("{{ՀՍՀ հեղ|Հ․ Պողոսյան}}") == "Հ․ Պողոսյան"
+        assert clean_wikitext("{{կ|<big>'''Ը․'''</big>}}") == "Ը․"
+
+    def test_block_templates_take_a_line_of_their_own(self) -> None:
+        # Written with nothing between them and the text they follow or
+        # lead; unwrapped in place they would weld two words into one.
+        assert clean_wikitext("մեջ։{{ՀՍՀ հեղ|Վ. Մաղալյան}}\nՄԱԽՄՈՒՐՈՎԱ Տատյանա").splitlines() == [
+            "մեջ։",
+            "Վ. Մաղալյան",
+            "ՄԱԽՄՈՒՐՈՎԱ Տատյանա",
+        ]
+        assert clean_wikitext("{{Աջաթև|14 Սեպտեմբեր}}Երէկ գիշեր").splitlines() == [
+            "14 Սեպտեմբեր",
+            "Երէկ գիշեր",
+        ]
+        # Already on its own line: no blank line is added around it.
+        assert clean_wikitext("ա\n{{Կենտրոն|ՏԱՂ}}\nբ") == "ա\nՏԱՂ\nբ"
+        # Nested blocks are one line, not three.
+        assert clean_wikitext("ա {{Կենտրոն|{{կ|ՏԱՂ}}}} բ") == "ա\nՏԱՂ\nբ"
+
+    def test_a_named_argument_is_not_the_text(self) -> None:
+        assert clean_wikitext("{{ct|f=120%|t=1|''ՍԵԲԱՍՏԱՑԻ ՄՈՒՐԱԴ''}}") == "ՍԵԲԱՍՏԱՑԻ ՄՈՒՐԱԴ"
+        assert clean_wikitext("ա {{աջաթև|}} բ") == "ա բ"
+
+    def test_a_word_broken_across_pages_keeps_the_part_this_page_prints(self) -> None:
+        assert clean_wikitext("այր {{գբս|նշանա|նշանաւոր}}") == "այր նշանա"
+        assert clean_wikitext("{{գբվ|տանք|աշխատանք}} ու գործ") == "տանք ու գործ"
+
+    def test_a_link_inside_a_formatting_template_keeps_its_label(self) -> None:
+        assert clean_wikitext("{{Կենտրոն|[[Հեղինակ:Խաչատուր Աբովյան|Խ. ԱԲՈՎՅԱՆ]]}}") == "Խ. ԱԲՈՎՅԱՆ"
+
+    def test_formatting_inside_formatting(self) -> None:
+        assert clean_wikitext("{{Կենտրոն|{{x-larger|ՏԱՂ ՉՈՐՍ ՏԱՐԵՐԱՑ}}}}") == "ՏԱՂ ՉՈՐՍ ՏԱՐԵՐԱՑ"
+        # ...and an unknown template inside a known one still goes.
+        assert clean_wikitext("{{Կենտրոն|ՏԱՂ{{rule|4em}}}}") == "ՏԱՂ"
+
+    def test_line_numbers_and_unknown_templates_still_go(self) -> None:
+        assert clean_wikitext("{{Տող|150}}Ձայնք, որ մեղմէին") == "Ձայնք, որ մեղմէին"
+        assert clean_wikitext("ա {{Միջգրություն|լայնք=380px|տուփ}} բ") == "ա բ"
+
     def test_keeps_wikilink_display_text(self) -> None:
         assert clean_wikitext("[[Թիրախ|ցուցադրվող]] տեքստ") == "ցուցադրվող տեքստ"
         assert clean_wikitext("[[Պարզ հղում]]") == "Պարզ հղում"
@@ -358,6 +418,25 @@ class TestNormaliseTranscript:
         text = "ՕՐ<ԻՈՐԴ>.– Ոչ, ես այդ չեմ ասում «Ազգ» <1 անընթ.>"
         assert wikisource.normalise_transcript(text, "Ինդեքս:Թումանյանի ԵԼԺ հ5.djvu") == text
         assert "«ԻՈՐԴ»" in wikisource.normalise_transcript(text)  # any other source
+
+    def test_abovyan_keeps_the_brackets_its_edition_prints(self) -> None:
+        """Volume 1, page 45: the editor supplies a refrain's endings in
+        angle brackets. Folded, one line came out with a bracket and a
+        guillemet for a pair."""
+        title = (
+            "Ինդեքս:Խաչատուր Աբովյան, Երկերի լիակատար ժողովածու, հատոր 1 "
+            "(Khachatur Abovyan, Collective works, volume 1).djvu"
+        )
+        text = "սէր իմ սիրե <լւոյ>\nսէր իմ գե<րիս քոյ>"
+        assert wikisource.normalise_transcript(text, title) == text
+        assert "«" in wikisource.normalise_transcript(text)  # any other source
+        for volume in (
+            "հատոր 2 (Khachatur Abovyan, Collective works, volume 2)",
+            "հատոր 3 (Khachatur Abovyan, Collective works, volume 3)",
+        ):
+            other = f"Ինդեքս:Խաչատուր Աբովյան, Երկերի լիակատար ժողովածու, {volume}.djvu"
+            assert other in wikisource.PRINTED_ANGLE_BRACKETS
+        assert "Ինդեքս:Խաչատուր Աբովյան, Երկեր, հատոր 6.djvu" in wikisource.PRINTED_ANGLE_BRACKETS
 
     def test_labels_can_keep_their_angle_brackets(self) -> None:
         assert wikisource.normalise_transcript("<Ազգ>", angle_brackets_printed=True) == "<Ազգ>"
