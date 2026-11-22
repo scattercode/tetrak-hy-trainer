@@ -272,6 +272,59 @@ teaches the wrong shape, so it fails closed.
   transcript, so more crops survive alignment.
 - `bracketed` tier is off by default: spot-checking put its precision near
   half. Add it only with the `crops.csv` review in hand.
+- **Pass `--screen-wordlist` on every harvest** (brief 023), once for each
+  word list. A page marked proofread is not always a checked one: the
+  scanned file carries an OCR text layer, Wikisource fills a new page from
+  it, and a contributor can tidy the obvious damage and mark the page
+  proofread. Page 232 of Abovyan's first volume had about thirty wrong
+  words in 216 and had been "proofread" since its only revision. Such a
+  page is worst as training material, because a crop only teaches when the
+  reader disagreed with the transcript and the transcript's label was kept.
+
+**The transcript screen** (`transcript_check.py`). Before any crop is cut,
+the page as our reader read it is set against the transcript. A word is
+suspect when our reader has different letters there and stock Tesseract
+read our reader's word on the page and not the transcript's; the word
+lists veto a confusion the two readers share. A page at or over 1.5
+suspects per hundred words gives no crops at all, and `summary.json` lists
+it under `transcript_screen.pages_left_out` with the words that condemned
+it. It needs the `tesseract` command with its stock `hye` model; a
+`TESSDATA_PREFIX` left over from a baseline run is ignored on purpose,
+because the non-commercial models may not touch training material.
+
+What it was measured against, 19 November 2026
+(`scripts/calibrate_transcript_screen.py`, readings kept in
+`runs/transcript-screen/`): the words where our reader and a third engine
+agree against the transcript, the test checked by hand against the scan on page 232
+(seventeen of seventeen were transcript errors). Over 167 evaluation pages
+the two correlate 0.74. At 1.5 the screen leaves out 16 pages: 14 of the
+32 worst, 1 of the 85 cleanest. Page 232 scored 3.7 as it stood and 0.0
+corrected. On sixty pages from each of fourteen training sources:
+
+| Source | Status | Left out |
+|---|---|---|
+| Abovyan vol. 1 | proofread | 38% |
+| Abovyan vol. 2 | proofread | 37% |
+| Khatisian | proofread | 15% |
+| Faustus | proofread | 13% |
+| Encyclopedia vol. 9 | proofread | 12% |
+| Kajaznuni, Khrimian, Baronian vol. 10, Toranian | proofread | 5 to 10% |
+| Abovyan vol. 3, Otyan, Totovents | validated | 2 to 3% |
+| Medical encyclopedia | validated | 0% |
+
+- **Do not lower the limit to catch more.** At 1.0 the validated sources
+  lose up to a fifth of their pages. The screen is meant to miss some bad
+  pages and almost never drop a good one.
+- **Do not let the word list count against the transcript.** The first
+  version did (a rare transcript word against a common reading) and left
+  out four of the five dictionary pages: a page our reader finds hard gives
+  many misreadings that happen to be words, and those are the pages the
+  model most needs.
+- **It rests on Tesseract reading the page at all.** Where Tesseract is
+  weak (Khatisian's cursive italic) the screen sees less, so a low share
+  left out is not a clean bill for that source.
+- **A proofread status is evidence, not proof.** Validated pages measure
+  about twice as clean as proofread ones, and still carry typos.
 
 **Cyrillic and mixed tokens (brief 014).** Under charset v5 a crop whose
 label has an all-Cyrillic token is kept (v5 and v6 had no class for it and
