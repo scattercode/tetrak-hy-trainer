@@ -194,11 +194,13 @@ V8_CYRILLIC_LOSS = (
 V8_THREE_DOTS = (
     "v8 writes three full stops where the page prints the ellipsis character "
     "more often than v7 does (25 times against once over the seventeen "
-    "registers, with 23 ellipsis characters against v7's 60). The three "
-    "italic books' transcripts type the dots, and the fine-tune learnt the "
-    "transcribers' convention with the letterforms. Otyan's works, which "
-    "print many ellipses, still gained word recall. To be folded at harvest "
-    "before the next run."
+    "registers, with 23 ellipsis characters against v7's 60). It came with "
+    "the italic crops, since the control fine-tune did not do it, but the "
+    "cause is not established: two of the three books' transcripts type the "
+    "dots, yet only four of the 25,542 new training labels carry them; the "
+    "other such lines are not among the crops that survived alignment. "
+    "Otyan's works, which print many "
+    "ellipses, still gained word recall."
 )
 V8_REGISTER_LOSSES = (
     "Against v7 through Tetrak's pipeline (2026-11-17), v8 reads the Armenian "
